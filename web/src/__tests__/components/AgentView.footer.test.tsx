@@ -1,0 +1,430 @@
+import { describe, it, expect, afterEach, mock } from "bun:test"
+import { render, screen, cleanup } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
+import { AgentView } from "@/components/AgentView"
+import type { ContentBlock } from "@/api/types"
+
+afterEach(cleanup)
+
+// Mock lucide-react icons to avoid SVG issues in Happy DOM
+mock.module("lucide-react", () => ({
+  ChevronDown: () => null,
+  Copy: () => null,
+  Check: () => null,
+}))
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+function makeTextBlock(id: string, content: string, timestamp?: Date): ContentBlock {
+  return { id, type: "text", content, timestamp }
+}
+
+function makeUserBlock(id: string, content: string): ContentBlock {
+  return { id, type: "user", content }
+}
+
+function makeThinkingBlock(id: string, content: string): ContentBlock {
+  return { id, type: "thinking", content }
+}
+
+function makeToolBlock(id: string, toolName: string): ContentBlock {
+  return { id, type: "tool", content: "", toolName, toolDone: true }
+}
+
+function renderStream(props: Partial<React.ComponentProps<typeof AgentView>> = {}) {
+  return render(
+    <AgentView
+      blocks={props.blocks ?? []}
+      currentBlocks={props.currentBlocks ?? []}
+      isWorking={props.isWorking ?? false}
+    />
+  )
+}
+
+// ── tests ────────────────────────────────────────────────────────────────────
+
+describe("AgentView — AssistantFooter", () => {
+  describe("footer visibility", () => {
+    it("does not render footer when isWorking=true even with text blocks", () => {
+      const { container } = renderStream({
+        blocks: [makeTextBlock("b1", "Hello world")],
+        currentBlocks: [],
+        isWorking: true,
+      })
+      const footer = container.querySelector(".mt-1.flex.items-center.gap-1\\.5")
+      expect(footer).toBeNull()
+    })
+
+    it("does not render footer when all blocks are user-type", () => {
+      const { container } = renderStream({
+        blocks: [makeUserBlock("u1", "Hello"), makeUserBlock("u2", "World")],
+        currentBlocks: [],
+        isWorking: false,
+      })
+      const footer = container.querySelector(".mt-1.flex.items-center.gap-1\\.5")
+      expect(footer).toBeNull()
+    })
+
+    it("does not render footer when there are no blocks at all", () => {
+      const { container } = renderStream({
+        blocks: [],
+        currentBlocks: [],
+        isWorking: false,
+      })
+      const footer = container.querySelector(".mt-1.flex.items-center.gap-1\\.5")
+      expect(footer).toBeNull()
+    })
+
+    it("does not render footer when there is no text content and no timestamp", () => {
+      const { container } = renderStream({
+        blocks: [
+          makeThinkingBlock("t1", "Thinking..."),
+          makeToolBlock("tool1", "read"),
+        ],
+        currentBlocks: [],
+        isWorking: false,
+      })
+      const footer = container.querySelector(".mt-1.flex.items-center.gap-1\\.5")
+      expect(footer).toBeNull()
+    })
+  })
+
+  describe("copy button", () => {
+    it("renders copy button when there is text content", () => {
+      renderStream({
+        blocks: [makeTextBlock("b1", "Hello world")],
+        currentBlocks: [],
+        isWorking: false,
+      })
+      const copyBtn = screen.queryByRole("button", { name: /copy response/i })
+      expect(copyBtn).toBeTruthy()
+    })
+
+    it("does not render copy button when there is no text content", () => {
+      renderStream({
+        blocks: [makeThinkingBlock("t1", "Thinking...")],
+        currentBlocks: [],
+        isWorking: false,
+      })
+      const copyBtn = screen.queryByRole("button", { name: /copy response/i })
+      expect(copyBtn).toBeNull()
+    })
+
+    it("copy button has correct aria-label", () => {
+      renderStream({
+        blocks: [makeTextBlock("b1", "Hello world")],
+        currentBlocks: [],
+        isWorking: false,
+      })
+      const copyBtn = screen.getByRole("button", { name: /copy response/i })
+      expect(copyBtn.getAttribute("aria-label")).toBe("Copy response")
+    })
+
+    it("copy button has correct title attribute", () => {
+      renderStream({
+        blocks: [makeTextBlock("b1", "Hello world")],
+        currentBlocks: [],
+        isWorking: false,
+      })
+      const copyBtn = screen.getByRole("button", { name: /copy response/i })
+      expect(copyBtn.getAttribute("title")).toBe("Copy")
+    })
+  })
+
+  describe("copy functionality", () => {
+    it("calls navigator.clipboard.writeText when copy button is clicked", async () => {
+      const user = userEvent.setup()
+      const writeText = mock(async () => {})
+      Object.defineProperty(navigator, "clipboard", {
+        value: { writeText },
+        configurable: true,
+      })
+
+      renderStream({
+        blocks: [makeTextBlock("b1", "Hello world")],
+        currentBlocks: [],
+        isWorking: false,
+      })
+
+      const copyBtn = screen.getByRole("button", { name: /copy response/i })
+      await user.click(copyBtn)
+
+      expect(writeText).toHaveBeenCalledOnce()
+      expect(writeText).toHaveBeenCalledWith("Hello world")
+    })
+
+    it("copies text from multiple text blocks joined with newlines", async () => {
+      const user = userEvent.setup()
+      const writeText = mock(async () => {})
+      Object.defineProperty(navigator, "clipboard", {
+        value: { writeText },
+        configurable: true,
+      })
+
+      renderStream({
+        blocks: [
+          makeUserBlock("u1", "Question"),
+          makeTextBlock("b1", "First response"),
+          makeTextBlock("b2", "Second response"),
+        ],
+        currentBlocks: [],
+        isWorking: false,
+      })
+
+      const copyBtn = screen.getByRole("button", { name: /copy response/i })
+      await user.click(copyBtn)
+
+      expect(writeText).toHaveBeenCalledWith("First response\n\nSecond response")
+    })
+
+    it("each turn's copy button copies only that turn's text", async () => {
+      // Me with per-turn footers, every assistant turn renders its own copy
+      // button scoped to its own text — first turn copies "Old response",
+      // second turn copies "New response".
+      const user = userEvent.setup()
+      const writeText = mock(async () => {})
+      Object.defineProperty(navigator, "clipboard", {
+        value: { writeText },
+        configurable: true,
+      })
+
+      renderStream({
+        blocks: [
+          makeTextBlock("b1", "Old response"),
+          makeUserBlock("u1", "New question"),
+          makeTextBlock("b2", "New response"),
+        ],
+        currentBlocks: [],
+        isWorking: false,
+      })
+
+      const copyBtns = screen.getAllByRole("button", { name: /copy response/i })
+      expect(copyBtns).toHaveLength(2)
+
+      await user.click(copyBtns[0])
+      expect(writeText).toHaveBeenLastCalledWith("Old response")
+
+      await user.click(copyBtns[1])
+      expect(writeText).toHaveBeenLastCalledWith("New response")
+    })
+
+    it("strips sleep sentinels from copied text", async () => {
+      const user = userEvent.setup()
+      const writeText = mock(async () => {})
+      Object.defineProperty(navigator, "clipboard", {
+        value: { writeText },
+        configurable: true,
+      })
+
+      renderStream({
+        blocks: [
+          makeUserBlock("u1", "Question"),
+          makeTextBlock("b1", "Response<sleep>"),
+        ],
+        currentBlocks: [],
+        isWorking: false,
+      })
+
+      const copyBtn = screen.getByRole("button", { name: /copy response/i })
+      await user.click(copyBtn)
+
+      expect(writeText).toHaveBeenCalledWith("Response")
+    })
+  })
+
+  describe("timestamp rendering", () => {
+    it("renders timestamp when last non-user block has a timestamp", () => {
+      const date = new Date(2024, 0, 15, 14, 30, 0)
+      const { container } = renderStream({
+        blocks: [makeTextBlock("b1", "Hello", date)],
+        currentBlocks: [],
+        isWorking: false,
+      })
+      // Look for the timestamp in the footer specifically
+      const footer = container.querySelector(".mt-1.flex.items-center.gap-1\\.5")
+      expect(footer).toBeTruthy()
+      const timeEl = footer?.querySelector("span")
+      expect(timeEl?.textContent).toMatch(/\d+:\d+/)
+    })
+
+    it("uses timestamp from last non-user block even if earlier blocks have timestamps", () => {
+      const date1 = new Date(2024, 0, 15, 10, 0, 0)
+      const date2 = new Date(2024, 0, 15, 14, 30, 0)
+      const { container } = renderStream({
+        blocks: [
+          makeTextBlock("b1", "First", date1),
+          makeThinkingBlock("t1", "Thinking"),
+          makeTextBlock("b2", "Second", date2),
+        ],
+        currentBlocks: [],
+        isWorking: false,
+      })
+      // Should render the time from the last block (b2)
+      const footer = container.querySelector(".mt-1.flex.items-center.gap-1\\.5")
+      expect(footer).toBeTruthy()
+      const timeEl = footer?.querySelector("span")
+      expect(timeEl?.textContent).toMatch(/\d+:\d+/)
+    })
+
+    it("does not render timestamp when no block has a timestamp", () => {
+      const { container } = renderStream({
+        blocks: [makeTextBlock("b1", "Hello")],
+        currentBlocks: [],
+        isWorking: false,
+      })
+      // Should only have the copy button, no time
+      const copyBtn = screen.getByRole("button", { name: /copy response/i })
+      expect(copyBtn).toBeTruthy()
+      // Check that there's no footer with timestamp
+      const footer = container.querySelector(".mt-1.flex.items-center.gap-1\\.5")
+      const timeSpan = footer?.querySelector("span")
+      expect(timeSpan).toBeNull()
+    })
+
+    it("renders timestamp from thinking block if it's the last non-user block", () => {
+      const { container } = renderStream({
+        blocks: [
+          makeUserBlock("u1", "Question"),
+          makeThinkingBlock("t1", "Thinking", ),
+          makeTextBlock("b1", "Response"),
+        ],
+        currentBlocks: [],
+        isWorking: false,
+      })
+      // The last non-user block is the text block, so it should have a timestamp
+      // But since we didn't add one, there should be no timestamp rendered
+      const footer = container.querySelector(".mt-1.flex.items-center.gap-1\\.5")
+      const timeSpan = footer?.querySelector("span")
+      expect(timeSpan).toBeNull()
+    })
+
+    it("renders timestamp from tool block if it's the last non-user block", () => {
+      const date = new Date(2024, 0, 15, 14, 30, 0)
+      const toolBlock: ContentBlock = {
+        id: "tool1",
+        type: "tool",
+        content: "",
+        toolName: "read",
+        toolDone: true,
+        timestamp: date,
+      }
+      const { container } = renderStream({
+        blocks: [
+          makeUserBlock("u1", "Question"),
+          toolBlock,
+        ],
+        currentBlocks: [],
+        isWorking: false,
+      })
+      // Footer should render because there's a non-user block with timestamp
+      const footer = container.querySelector(".mt-1.flex.items-center.gap-1\\.5")
+      expect(footer).toBeTruthy()
+      const timeEl = footer?.querySelector("span")
+      expect(timeEl?.textContent).toMatch(/\d+:\d+/)
+    })
+  })
+
+  describe("footer with mixed content", () => {
+    it("renders footer with both copy button and timestamp", () => {
+      const date = new Date(2024, 0, 15, 14, 30, 0)
+      const { container } = renderStream({
+        blocks: [
+          makeUserBlock("u1", "Question"),
+          makeTextBlock("b1", "Response", date),
+        ],
+        currentBlocks: [],
+        isWorking: false,
+      })
+      const footer = container.querySelector(".mt-1.flex.items-center.gap-1\\.5")
+      expect(footer).toBeTruthy()
+      const copyBtn = screen.getByRole("button", { name: /copy response/i })
+      expect(copyBtn).toBeTruthy()
+      const timeEl = footer?.querySelector("span")
+      expect(timeEl?.textContent).toMatch(/\d+:\d+/)
+    })
+
+    it("renders footer with only timestamp when there is no text content", () => {
+      const date = new Date(2024, 0, 15, 14, 30, 0)
+      const toolBlock: ContentBlock = {
+        id: "tool1",
+        type: "tool",
+        content: "",
+        toolName: "read",
+        toolDone: true,
+        timestamp: date,
+      }
+      const { container } = renderStream({
+        blocks: [
+          makeUserBlock("u1", "Question"),
+          toolBlock,
+        ],
+        currentBlocks: [],
+        isWorking: false,
+      })
+      const copyBtn = screen.queryByRole("button", { name: /copy response/i })
+      expect(copyBtn).toBeNull()
+      const footer = container.querySelector(".mt-1.flex.items-center.gap-1\\.5")
+      expect(footer).toBeTruthy()
+      const timeEl = footer?.querySelector("span")
+      expect(timeEl?.textContent).toMatch(/\d+:\d+/)
+    })
+  })
+
+  describe("footer with currentBlocks", () => {
+    it("does not render footer when isWorking=true even with text in currentBlocks", () => {
+      const { container } = renderStream({
+        blocks: [],
+        currentBlocks: [makeTextBlock("b1", "Streaming response")],
+        isWorking: true,
+      })
+      const footer = container.querySelector(".mt-1.flex.items-center.gap-1\\.5")
+      expect(footer).toBeNull()
+    })
+
+    it("renders footer when isWorking=false even if turn lives in currentBlocks (not yet flushed)", () => {
+      // Me with the per-turn footer model, the agent being idle means the turn
+      // is finished — footer shows regardless of whether the blocks live in
+      // `blocks` or `currentBlocks`.
+      const date = new Date(2024, 0, 15, 14, 30, 0)
+      renderStream({
+        blocks: [],
+        currentBlocks: [makeTextBlock("b1", "Response", date)],
+        isWorking: false,
+      })
+      const copyBtn = screen.getByRole("button", { name: /copy response/i })
+      expect(copyBtn).toBeTruthy()
+    })
+
+    it("renders footer for previous turn even when next user message is optimistically in currentBlocks", () => {
+      // Me regression test: a completed assistant turn must keep its copy/time
+      // footer when the next user message starts a new turn (the optimistic
+      // user bubble is pushed into `currentBlocks` while `isWorking` flips on).
+      const date = new Date(2024, 0, 15, 14, 30, 0)
+      renderStream({
+        blocks: [
+          makeUserBlock("u1", "First question"),
+          makeTextBlock("b1", "First response", date),
+        ],
+        currentBlocks: [makeUserBlock("u2", "Second question")],
+        isWorking: true,
+      })
+      const copyBtn = screen.getByRole("button", { name: /copy response/i })
+      expect(copyBtn).toBeTruthy()
+    })
+
+    it("renders footer when isWorking=false and currentBlocks is empty (turn fully flushed)", () => {
+      const date = new Date(2024, 0, 15, 14, 30, 0)
+      const { container } = renderStream({
+        blocks: [makeUserBlock("u1", "Question"), makeTextBlock("b1", "Response", date)],
+        currentBlocks: [],
+        isWorking: false,
+      })
+      const copyBtn = screen.getByRole("button", { name: /copy response/i })
+      expect(copyBtn).toBeTruthy()
+      const footer = container.querySelector(".mt-1.flex.items-center.gap-1\\.5")
+      expect(footer).toBeTruthy()
+      const timeEl = footer?.querySelector("span")
+      expect(timeEl?.textContent).toMatch(/\d+:\d+/)
+    })
+  })
+})

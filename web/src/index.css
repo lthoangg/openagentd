@@ -1,0 +1,527 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+@import "highlight.js/styles/atom-one-dark.css";
+
+/* ─────────────────────────────────────────────────────────────
+ * Silver Instrument — syntax highlighting (highlight.js)
+ * Tokens are theme-aware via var() references.
+ * ───────────────────────────────────────────────────────────── */
+.hljs {
+  background: transparent;
+  color: var(--color-text);
+}
+.hljs-comment,
+.hljs-quote          { color: var(--color-syn-comment); font-style: italic; }
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in,
+.hljs-tag            { color: var(--color-syn-keyword); }
+.hljs-string,
+.hljs-attr,
+.hljs-attribute      { color: var(--color-syn-string); }
+.hljs-number,
+.hljs-literal        { color: var(--color-syn-number); }
+.hljs-title,
+.hljs-title.class_,
+.hljs-section        { color: var(--color-syn-type); }
+.hljs-variable,
+.hljs-template-variable,
+.hljs-name           { color: var(--color-syn-function); }
+.hljs-type,
+.hljs-class          { color: var(--color-syn-operator); }
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition       { color: var(--color-syn-string); }
+.hljs-deletion       { color: var(--color-syn-variable); }
+.hljs-function .hljs-title,
+.hljs-title.function_            { color: var(--color-syn-function); }
+.hljs-params                     { color: var(--color-text); }
+.hljs-emphasis       { font-style: italic; }
+.hljs-strong         { font-weight: bold; }
+
+@custom-variant dark (&:is(.dark *));
+
+/* ─────────────────────────────────────────────────────────────
+ * Tailwind @theme — expose design tokens as utilities.
+ * Tokens themselves are defined in :root.dark / :root.light below.
+ * ───────────────────────────────────────────────────────────── */
+@theme inline {
+    --font-heading: var(--font-sans);
+    --font-sans: 'Geist Variable', sans-serif;
+
+    /* shadcn semantic tokens (mapped onto Silver Instrument) */
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Silver Instrument — design tokens
+ * Dark mode is default. Light mode overrides via :root.light.
+ * Theme class is set on <html> before paint (see index.html).
+ * ───────────────────────────────────────────────────────────── */
+:root,
+:root.dark {
+    color-scheme: dark;
+
+    /* Foundation — surfaces */
+    --color-bg:            #0A0A0B;
+    --color-surface:       #111113;
+    --color-surface-2:     #18181B;
+    --color-surface-3:     #1F1F23;
+    --color-border:        #27272A;
+    --color-border-strong: #3F3F46;
+
+    /* Text */
+    --color-text:          #FAFAFA;
+    --color-text-2:        #A1A1AA;
+    --color-text-muted:    #71717A;
+    --color-text-subtle:   #52525B;
+
+    /* Accent — max-contrast neutral (silver on dark) */
+    --color-accent:        #E4E4E7;
+    --color-accent-hover:  #F4F4F5;
+    --color-accent-subtle: rgba(228, 228, 231, 0.10);
+    --color-accent-dim:    rgba(228, 228, 231, 0.05);
+    --gradient-accent:     linear-gradient(180deg, #FAFAFA 0%, #D4D4D8 100%);
+
+    /* Semantic state (muted set for dark) */
+    --color-success:         #4ADE80;
+    --color-success-subtle:  rgba(74, 222, 128, 0.12);
+    --color-warning:         #FBBF24;
+    --color-warning-subtle:  rgba(251, 191, 36, 0.12);
+    --color-error:           #F87171;
+    --color-error-subtle:    rgba(248, 113, 113, 0.12);
+    --color-info:            #93C5FD;
+    --color-info-subtle:     rgba(147, 197, 253, 0.12);
+
+    /* Syntax highlighting */
+    --color-syn-comment:   #71717A;
+    --color-syn-keyword:   #C4B5FD;
+    --color-syn-function:  #93C5FD;
+    --color-syn-variable:  #F87171;
+    --color-syn-string:    #86EFAC;
+    --color-syn-number:    #FBBF24;
+    --color-syn-type:      #FCD34D;
+    --color-syn-operator:  #A1A1AA;
+
+    /* Depth & focus */
+    --focus-ring:          #E4E4E7;
+    --shadow-depth:        none;
+
+    /* Motion — durations (theme-invariant, defined once on dark root) */
+    --motion-instant: 80ms;
+    --motion-fast:    150ms;
+    --motion-base:    240ms;
+    --motion-slow:    400ms;
+    --motion-glacial: 800ms;
+
+    /* Motion — easings */
+    --ease-out:           cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out:        cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-spring-soft:   cubic-bezier(0.34, 1.2, 0.64, 1);
+    --ease-spring-snappy: cubic-bezier(0.22, 1.4, 0.36, 1);
+    --ease-linear:        linear;
+
+    /* shadcn base tokens (map to Silver Instrument) */
+    --background:              var(--color-bg);
+    --foreground:              var(--color-text);
+    --card:                    var(--color-surface-2);
+    --card-foreground:         var(--color-text);
+    --popover:                 var(--color-surface);
+    --popover-foreground:      var(--color-text);
+    --primary:                 var(--color-accent);
+    --primary-foreground:      var(--color-bg);
+    --secondary:               var(--color-surface-2);
+    --secondary-foreground:    var(--color-text);
+    --muted:                   var(--color-surface-2);
+    --muted-foreground:        var(--color-text-muted);
+    --accent:                  var(--color-accent-subtle);
+    --accent-foreground:       var(--color-text);
+    --destructive:             var(--color-error);
+    --border:                  var(--color-border);
+    --input:                   var(--color-border);
+    --ring:                    var(--focus-ring);
+    --radius:                  0.5rem;
+    --sidebar:                 var(--color-surface);
+    --sidebar-foreground:      var(--color-text);
+    --sidebar-primary:         var(--color-accent);
+    --sidebar-primary-foreground: var(--color-bg);
+    --sidebar-accent:          var(--color-surface-2);
+    --sidebar-accent-foreground: var(--color-text);
+    --sidebar-border:          var(--color-border);
+    --sidebar-ring:            var(--focus-ring);
+    --chart-1:                 #93C5FD;
+    --chart-2:                 #86EFAC;
+    --chart-3:                 #FCD34D;
+    --chart-4:                 #C4B5FD;
+    --chart-5:                 #F9A8D4;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Light mode — graphite accent, shadows provide depth
+ * ───────────────────────────────────────────────────────────── */
+:root.light {
+    color-scheme: light;
+
+    --color-bg:            #FAFAFA;
+    --color-surface:       #FFFFFF;
+    --color-surface-2:     #F4F4F5;
+    --color-surface-3:     #E4E4E7;
+    --color-border:        #E4E4E7;
+    --color-border-strong: #D4D4D8;
+
+    --color-text:          #09090B;
+    --color-text-2:        #52525B;
+    --color-text-muted:    #71717A;
+    --color-text-subtle:   #A1A1AA;
+
+    --color-accent:        #27272A;
+    --color-accent-hover:  #18181B;
+    --color-accent-subtle: rgba(39, 39, 42, 0.06);
+    --color-accent-dim:    rgba(39, 39, 42, 0.03);
+    --gradient-accent:     linear-gradient(180deg, #3F3F46 0%, #18181B 100%);
+
+    --color-success:         #16A34A;
+    --color-success-subtle:  rgba(22, 163, 74, 0.10);
+    --color-warning:         #D97706;
+    --color-warning-subtle:  rgba(217, 119, 6, 0.10);
+    --color-error:           #DC2626;
+    --color-error-subtle:    rgba(220, 38, 38, 0.08);
+    --color-info:            #2563EB;
+    --color-info-subtle:     rgba(37, 99, 235, 0.08);
+
+    --color-syn-comment:   #71717A;
+    --color-syn-keyword:   #7C3AED;
+    --color-syn-function:  #2563EB;
+    --color-syn-variable:  #DC2626;
+    --color-syn-string:    #16A34A;
+    --color-syn-number:    #D97706;
+    --color-syn-type:      #B45309;
+    --color-syn-operator:  #52525B;
+
+    --focus-ring:          #18181B;
+    --shadow-depth:        0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.04);
+
+    /* Light-mode chart spectrum (bumped -600 shades for AA on white) */
+    --chart-1: #2563EB;
+    --chart-2: #16A34A;
+    --chart-3: #D97706;
+    --chart-4: #7C3AED;
+    --chart-5: #DB2777;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    /* Eliminate 300ms tap delay on mobile without blocking scroll */
+    touch-action: manipulation;
+    /* Remove iOS blue tap flash */
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* Prevent body bounce scroll — each scroll region manages its own */
+    overscroll-behavior: none;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Safe-area helpers — notch / home-indicator clearance (iOS)
+ * Apply to the outermost layout shells, not every element.
+ * ───────────────────────────────────────────────────────────── */
+.pb-safe { padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px); }
+.pt-safe { padding-top:    env(safe-area-inset-top,    0px); }
+.pl-safe { padding-left:   env(safe-area-inset-left,   0px); }
+.pr-safe { padding-right:  env(safe-area-inset-right,  0px); }
+
+/* ─────────────────────────────────────────────────────────────
+ * Scrollbar — minimal, theme-aware
+ * ───────────────────────────────────────────────────────────── */
+@layer base {
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-muted);
+  }
+  /* Contain scroll within each region — prevents page-level overscroll on iOS */
+  .overflow-y-auto, .overflow-y-scroll {
+    overscroll-behavior: contain;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Focus ring — :focus-visible only, never on mouse click
+ * See documents/styling-specs/interaction.md#focus-ring-specification
+ * ───────────────────────────────────────────────────────────── */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+    transition: outline-color var(--motion-fast) var(--ease-out);
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Skip link — visible on first Tab press
+ * ───────────────────────────────────────────────────────────── */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  padding: 8px 16px;
+  background: var(--color-accent);
+  color: var(--color-bg);
+  z-index: 100;
+  transition: top var(--motion-fast) var(--ease-out);
+}
+.skip-link:focus-visible {
+  top: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Animations — each conveys a specific piece of information.
+ * See documents/styling-specs/motion.md#choreography-patterns
+ * ───────────────────────────────────────────────────────────── */
+
+/* Streaming cursor — agent is actively generating this token. */
+@keyframes streaming-cursor {
+  0%, 50%   { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+.streaming-cursor {
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  vertical-align: text-bottom;
+  background: currentColor;
+  animation: streaming-cursor 1000ms steps(2, end) infinite;
+}
+
+/* Thinking dot — one of three; stagger set inline on element. */
+@keyframes thinking-dot {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+.thinking-dot {
+  animation: thinking-dot 1400ms var(--ease-in-out) infinite;
+}
+
+/* Tool-call row — dispatched tool just joined the transcript. */
+@keyframes tool-row-enter {
+  from { transform: translateY(8px); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
+}
+.tool-row-enter {
+  animation: tool-row-enter var(--motion-base) var(--ease-spring-soft);
+}
+
+/* Done pulse — server confirmed persistence (opacity only, no color flash). */
+@keyframes done-pulse {
+  from { opacity: 0.6; }
+  to   { opacity: 1; }
+}
+.done-pulse {
+  animation: done-pulse var(--motion-base) var(--ease-out);
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Raised surface — cards, panels, grouped containers.
+ * Dark: `--shadow-depth` is `none`; brightness carries elevation.
+ * Light: real shadow (surfaces are all near-white, brightness can't).
+ * Apply to elements that sit one layer above `bg`.
+ * ───────────────────────────────────────────────────────────── */
+.surface-raised {
+  box-shadow: var(--shadow-depth);
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Font-weight transition — signature interaction.
+ * Apply to buttons, nav items, tabs, menu items. Not prose.
+ * ───────────────────────────────────────────────────────────── */
+.interactive-weight {
+  font-weight: 400;
+  transition: font-weight var(--motion-fast) var(--ease-in-out);
+}
+.interactive-weight:hover  { font-weight: 500; }
+.interactive-weight:active { font-weight: 600; }
+
+/* ─────────────────────────────────────────────────────────────
+ * prefers-reduced-motion — honor system-wide.
+ * Progress bars keep animating (time is literal); everything else snaps.
+ * ───────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Drag and drop panel styles
+ * ───────────────────────────────────────────────────────────── */
+.panel-dragging {
+  opacity: 0.45;
+  cursor: grabbing;
+}
+.panel-drop-target {
+  outline: 2px dashed color-mix(in srgb, var(--color-accent) 55%, transparent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--color-accent) 4%, transparent);
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Markdown prose — .oa-prose (theme-aware via tokens)
+ * ───────────────────────────────────────────────────────────── */
+.oa-prose {
+  color: var(--color-text);
+  line-height: 1.75;
+}
+.oa-prose p { margin-bottom: 0.75em; }
+.oa-prose p:last-child { margin-bottom: 0; }
+.oa-prose h1, .oa-prose h2, .oa-prose h3 {
+  font-weight: 600;
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+  color: var(--color-text);
+}
+.oa-prose h1 { font-size: 1.2em;  color: var(--color-text); }
+.oa-prose h2 { font-size: 1.08em; color: var(--color-text); }
+.oa-prose h3 { font-size: 1em;    color: var(--color-text-2); }
+.oa-prose ul, .oa-prose ol {
+  padding-left: 1.5em;
+  margin-bottom: 0.75em;
+}
+.oa-prose ol {
+  list-style-type: decimal;
+}
+.oa-prose ul {
+  list-style-type: disc;
+}
+.oa-prose li { margin-bottom: 0.25em; }
+.oa-prose code {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0.15em 0.4em;
+  font-size: 0.85em;
+  font-family: monospace;
+  color: var(--color-syn-string);
+}
+.oa-prose pre {
+  background: var(--color-surface);
+  border-radius: 8px;
+  padding: 1em 1.25em;
+  overflow-x: auto;
+  margin: 0;
+  border: 1px solid var(--color-border);
+}
+
+.oa-prose pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 0.85em;
+  color: var(--color-text);
+}
+.oa-prose a {
+  color: var(--color-text);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: var(--color-border-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 120ms ease, color 120ms ease;
+}
+.oa-prose a:hover {
+  color: var(--color-accent-hover, var(--color-accent));
+  text-decoration-color: currentColor;
+}
+.oa-prose a:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.oa-prose blockquote {
+  border-left: 2px solid var(--color-border-strong);
+  padding-left: 0.75em;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin: 0.75em 0;
+}
+.oa-prose hr {
+  border-color: var(--color-border);
+  margin: 1em 0;
+}
+.oa-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875em;
+}
+.oa-prose th, .oa-prose td {
+  border: 1px solid var(--color-border);
+  padding: 0.5em 0.75em;
+  text-align: left;
+}
+.oa-prose th {
+  color: var(--color-text-2);
+  background: var(--color-surface-2);
+}
+.oa-prose strong { color: var(--color-text); font-weight: 600; }
+.oa-prose em     { color: var(--color-syn-keyword); }

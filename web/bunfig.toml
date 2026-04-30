@@ -1,0 +1,6 @@
+[test]
+preload = ["./src/__tests__/setup.ts"]
+
+[serve.static]
+
+[define]

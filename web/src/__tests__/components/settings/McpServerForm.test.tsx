@@ -1,0 +1,405 @@
+import { describe, it, expect, afterEach, mock } from 'bun:test'
+import { render, screen, cleanup } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { McpServerForm } from '@/components/settings/McpServerForm'
+import { emptyDraft, type McpServerDraft } from '@/components/settings/McpServerDraft'
+
+// Mock lucide-react icons to avoid SVG issues in Happy DOM
+mock.module('lucide-react', () => ({
+  Plus: () => null,
+  Trash2: () => null,
+}))
+
+afterEach(cleanup)
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function renderForm(
+  value: McpServerDraft,
+  onChange: (next: McpServerDraft) => void,
+  props?: { isNew?: boolean; disabled?: boolean; errors?: Record<string, string> | null },
+) {
+  return render(
+    <McpServerForm
+      value={value}
+      onChange={onChange}
+      isNew={props?.isNew}
+      disabled={props?.disabled}
+      errors={props?.errors}
+    />,
+  )
+}
+
+// ── Identity section ─────────────────────────────────────────────────────────
+
+describe('McpServerForm — Identity section', () => {
+  it('renders name input with value', () => {
+    const draft = { ...emptyDraft(), name: 'filesystem' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange, { isNew: true })
+    const input = screen.getByDisplayValue('filesystem')
+    expect(input).toBeTruthy()
+  })
+
+  it('disables name input when isNew is false', () => {
+    const draft = { ...emptyDraft(), name: 'filesystem' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange, { isNew: false })
+    const input = screen.getByDisplayValue('filesystem') as HTMLInputElement
+    expect(input.disabled).toBe(true)
+  })
+
+  it('enables name input when isNew is true', () => {
+    const draft = { ...emptyDraft(), name: 'filesystem' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange, { isNew: true })
+    const input = screen.getByDisplayValue('filesystem') as HTMLInputElement
+    expect(input.disabled).toBe(false)
+  })
+
+  it('calls onChange with new name when name input changes', async () => {
+    const user = userEvent.setup()
+    const draft = emptyDraft()
+    const onChange = mock(() => {})
+    renderForm(draft, onChange, { isNew: true })
+    const input = screen.getByPlaceholderText('filesystem') as HTMLInputElement
+    await user.clear(input)
+    await user.type(input, 'myserver')
+    expect(onChange).toHaveBeenCalled()
+  })
+
+  it('renders enabled toggle with current state', () => {
+    const draft = { ...emptyDraft(), enabled: true }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    const enabledBtn = screen.getByRole('radio', { name: /enabled/i })
+    expect(enabledBtn).toBeTruthy()
+  })
+
+  it('calls onChange with enabled=true when Enabled button is clicked', async () => {
+    const user = userEvent.setup()
+    const draft = { ...emptyDraft(), enabled: false }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    const enabledBtn = screen.getByRole('radio', { name: /enabled/i })
+    await user.click(enabledBtn)
+    expect(onChange).toHaveBeenCalled()
+  })
+
+  it('calls onChange with enabled=false when Disabled button is clicked', async () => {
+    const user = userEvent.setup()
+    const draft = { ...emptyDraft(), enabled: true }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    const disabledBtn = screen.getByRole('radio', { name: /disabled/i })
+    await user.click(disabledBtn)
+    expect(onChange).toHaveBeenCalled()
+  })
+
+  it('displays name error when provided', () => {
+    const draft = emptyDraft()
+    const onChange = mock(() => {})
+    renderForm(draft, onChange, { errors: { name: 'Name is required.' } })
+    expect(screen.getByText('Name is required.')).toBeTruthy()
+  })
+})
+
+// ── Transport tabs ───────────────────────────────────────────────────────────
+
+describe('McpServerForm — Transport tabs', () => {
+  it('renders both stdio and http tabs', () => {
+    const draft = emptyDraft()
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    expect(screen.getByRole('tab', { name: /stdio/i })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: /http/i })).toBeTruthy()
+  })
+
+  it('shows stdio section when transport is stdio', () => {
+    const draft = { ...emptyDraft(), transport: 'stdio' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    expect(screen.getByText(/Stdio configuration/i)).toBeTruthy()
+  })
+
+  it('shows http section when transport is http', () => {
+    const draft = { ...emptyDraft(), transport: 'http' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    expect(screen.getByText(/HTTP configuration/i)).toBeTruthy()
+  })
+
+  it('switches to http tab when http tab is clicked', async () => {
+    const user = userEvent.setup()
+    const draft = { ...emptyDraft(), transport: 'stdio' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    const httpTab = screen.getByRole('tab', { name: /http/i })
+    await user.click(httpTab)
+    expect(onChange).toHaveBeenCalled()
+  })
+
+  it('switches to stdio tab when stdio tab is clicked', async () => {
+    const user = userEvent.setup()
+    const draft = { ...emptyDraft(), transport: 'http' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    const stdioTab = screen.getByRole('tab', { name: /stdio/i })
+    await user.click(stdioTab)
+    expect(onChange).toHaveBeenCalled()
+  })
+
+  it('preserves both transports fields when switching tabs', async () => {
+    const user = userEvent.setup()
+    let draft: McpServerDraft = {
+      ...emptyDraft(),
+      transport: 'stdio',
+      command: 'npx',
+      url: 'https://example.com',
+    }
+    const onChange = mock((next: McpServerDraft) => {
+      draft = next
+    })
+    renderForm(draft, onChange)
+    const httpTab = screen.getByRole('tab', { name: /http/i })
+    await user.click(httpTab)
+    expect(onChange).toHaveBeenCalled()
+  })
+})
+
+// ── Stdio section ────────────────────────────────────────────────────────────
+
+describe('McpServerForm — Stdio section', () => {
+  it('renders command input with value', () => {
+    const draft = { ...emptyDraft(), transport: 'stdio', command: 'npx' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    expect(screen.getByDisplayValue('npx')).toBeTruthy()
+  })
+
+  it('calls onChange when command input changes', async () => {
+    const user = userEvent.setup()
+    const draft = { ...emptyDraft(), transport: 'stdio' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    const input = screen.getByPlaceholderText('npx') as HTMLInputElement
+    await user.type(input, 'python')
+    expect(onChange).toHaveBeenCalled()
+  })
+
+  it('displays command error when provided', () => {
+    const draft = { ...emptyDraft(), transport: 'stdio' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange, { errors: { command: 'Command is required.' } })
+    expect(screen.getByText('Command is required.')).toBeTruthy()
+  })
+
+  it('renders arguments textarea with value', () => {
+    const draft = {
+      ...emptyDraft(),
+      transport: 'stdio',
+      argsText: '@modelcontextprotocol/server-filesystem\n/tmp',
+    }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    expect(screen.getByDisplayValue(/@modelcontextprotocol/)).toBeTruthy()
+  })
+
+  it('calls onChange when arguments textarea changes', async () => {
+    const user = userEvent.setup()
+    const draft = { ...emptyDraft(), transport: 'stdio' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    const textarea = screen.getByPlaceholderText(/-y/) as HTMLTextAreaElement
+    await user.type(textarea, 'arg1')
+    expect(onChange).toHaveBeenCalled()
+  })
+
+  it('renders environment variables section', () => {
+    const draft = { ...emptyDraft(), transport: 'stdio' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    expect(screen.getByText(/Environment variables/i)).toBeTruthy()
+  })
+
+  it('displays env error when provided', () => {
+    const draft = { ...emptyDraft(), transport: 'stdio' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange, { errors: { env: 'Duplicate environment variable: KEY' } })
+    expect(screen.getByText(/Duplicate environment variable/)).toBeTruthy()
+  })
+})
+
+// ── HTTP section ─────────────────────────────────────────────────────────────
+
+describe('McpServerForm — HTTP section', () => {
+  it('renders url input with value', () => {
+    const draft = { ...emptyDraft(), transport: 'http', url: 'https://example.com' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    expect(screen.getByDisplayValue('https://example.com')).toBeTruthy()
+  })
+
+  it('calls onChange when url input changes', async () => {
+    const user = userEvent.setup()
+    const draft = { ...emptyDraft(), transport: 'http' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    const input = screen.getByPlaceholderText(/https:\/\/mcp/) as HTMLInputElement
+    await user.type(input, 'https://example.com')
+    expect(onChange).toHaveBeenCalled()
+  })
+
+  it('displays url error when provided', () => {
+    const draft = { ...emptyDraft(), transport: 'http' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange, { errors: { url: 'URL is required.' } })
+    expect(screen.getByText('URL is required.')).toBeTruthy()
+  })
+
+  it('renders headers section', () => {
+    const draft = { ...emptyDraft(), transport: 'http' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    expect(screen.getByText(/Headers/i)).toBeTruthy()
+  })
+
+  it('displays headers error when provided', () => {
+    const draft = { ...emptyDraft(), transport: 'http' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange, { errors: { headers: 'Duplicate header: X-Custom' } })
+    expect(screen.getByText(/Duplicate header/)).toBeTruthy()
+  })
+})
+
+// ── Pair list field (env vars, headers) ──────────────────────────────────────
+
+describe('McpServerForm — Pair list field', () => {
+  it('renders "None." when no pairs exist', () => {
+    const draft = { ...emptyDraft(), transport: 'stdio', envPairs: [] }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    expect(screen.getByText('None.')).toBeTruthy()
+  })
+
+  it('renders pair rows when pairs exist', () => {
+    const draft = {
+      ...emptyDraft(),
+      transport: 'stdio',
+      envPairs: [
+        { key: 'KEY1', value: 'val1' },
+        { key: 'KEY2', value: 'val2' },
+      ],
+    }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    expect(screen.getByDisplayValue('KEY1')).toBeTruthy()
+    expect(screen.getByDisplayValue('KEY2')).toBeTruthy()
+  })
+
+  it('calls onChange when pair key changes', async () => {
+    const user = userEvent.setup()
+    const draft = {
+      ...emptyDraft(),
+      transport: 'stdio',
+      envPairs: [{ key: 'KEY', value: 'val' }],
+    }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    const keyInput = screen.getByDisplayValue('KEY') as HTMLInputElement
+    await user.clear(keyInput)
+    await user.type(keyInput, 'NEWKEY')
+    expect(onChange).toHaveBeenCalled()
+  })
+
+  it('calls onChange when pair value changes', async () => {
+    const user = userEvent.setup()
+    const draft = {
+      ...emptyDraft(),
+      transport: 'stdio',
+      envPairs: [{ key: 'KEY', value: 'val' }],
+    }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    const valueInput = screen.getByDisplayValue('val') as HTMLInputElement
+    await user.clear(valueInput)
+    await user.type(valueInput, 'newval')
+    expect(onChange).toHaveBeenCalled()
+  })
+
+  it('renders Add button for pair list', () => {
+    const draft = { ...emptyDraft(), transport: 'stdio' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    const addBtn = screen.getByRole('button', { name: /add environment variables/i })
+    expect(addBtn).toBeTruthy()
+  })
+
+  it('calls onChange with new empty pair when Add button is clicked', async () => {
+    const user = userEvent.setup()
+    const draft = {
+      ...emptyDraft(),
+      transport: 'stdio',
+      envPairs: [{ key: 'KEY1', value: 'val1' }],
+    }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    const addBtn = screen.getByRole('button', { name: /add environment variables/i })
+    await user.click(addBtn)
+    expect(onChange).toHaveBeenCalled()
+  })
+
+  it('renders Remove button for each pair', () => {
+    const draft = {
+      ...emptyDraft(),
+      transport: 'stdio',
+      envPairs: [
+        { key: 'KEY1', value: 'val1' },
+        { key: 'KEY2', value: 'val2' },
+      ],
+    }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    const removeButtons = screen.getAllByRole('button', { name: /remove/i })
+    expect(removeButtons.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('calls onChange with pair removed when Remove button is clicked', async () => {
+    const user = userEvent.setup()
+    const draft = {
+      ...emptyDraft(),
+      transport: 'stdio',
+      envPairs: [
+        { key: 'KEY1', value: 'val1' },
+        { key: 'KEY2', value: 'val2' },
+      ],
+    }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange)
+    const removeButtons = screen.getAllByRole('button', { name: /remove/i })
+    await user.click(removeButtons[0])
+    expect(onChange).toHaveBeenCalled()
+  })
+})
+
+// ── Disabled state ───────────────────────────────────────────────────────────
+
+describe('McpServerForm — Disabled state', () => {
+  it('disables all inputs when disabled=true', () => {
+    const draft = { ...emptyDraft(), transport: 'stdio', command: 'cmd' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange, { disabled: true })
+    const inputs = screen.getAllByRole('textbox')
+    for (const input of inputs) {
+      expect((input as HTMLInputElement).disabled).toBe(true)
+    }
+  })
+
+  it('disables Add button when disabled=true', () => {
+    const draft = { ...emptyDraft(), transport: 'stdio' }
+    const onChange = mock(() => {})
+    renderForm(draft, onChange, { disabled: true })
+    const addBtn = screen.getByRole('button', { name: /add environment variables/i })
+    expect((addBtn as HTMLButtonElement).disabled).toBe(true)
+  })
+})

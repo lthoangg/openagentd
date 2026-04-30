@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0A0A0B" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#FAFAFA" media="(prefers-color-scheme: light)" />
+    <title>openagentd</title>
+    <script>
+      // Pre-paint theme application — prevents flash of wrong theme.
+      // Keep in sync with web/src/lib/theme.ts (storage key and resolution rules).
+      (function () {
+        try {
+          var stored = localStorage.getItem('oa-theme');
+          var pref = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+          var resolved =
+            pref === 'system'
+              ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+              : pref;
+          var root = document.documentElement;
+          root.classList.toggle('dark', resolved === 'dark');
+          root.classList.toggle('light', resolved === 'light');
+        } catch (e) {
+          // Fall back to dark (the default in index.css).
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
