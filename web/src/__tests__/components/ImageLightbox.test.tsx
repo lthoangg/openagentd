@@ -252,8 +252,8 @@ describe("ImageLightbox", () => {
     // Spy on createElement to capture the anchor element
     const originalCreateElement = document.createElement.bind(document)
     let capturedAnchor: HTMLAnchorElement | null = null
-    document.createElement = function (tagName: string, ...args: unknown[]) {
-      const el = originalCreateElement(tagName, ...args)
+    document.createElement = function (tagName: string, options?: ElementCreationOptions) {
+      const el = originalCreateElement(tagName, options)
       if (tagName === "a") {
         capturedAnchor = el as HTMLAnchorElement
       }
@@ -278,7 +278,7 @@ describe("ImageLightbox", () => {
     const downloadBtn = screen.getByLabelText("Download image")
     await user.click(downloadBtn)
 
-    expect(capturedAnchor?.download).toBe("photo.png")
+    expect((capturedAnchor as HTMLAnchorElement | null)?.download).toBe("photo.png")
 
     // Restore
     document.createElement = originalCreateElement
@@ -298,8 +298,8 @@ describe("ImageLightbox", () => {
     // Spy on createElement to capture the anchor element
     const originalCreateElement = document.createElement.bind(document)
     let capturedAnchor: HTMLAnchorElement | null = null
-    document.createElement = function (tagName: string, ...args: unknown[]) {
-      const el = originalCreateElement(tagName, ...args)
+    document.createElement = function (tagName: string, options?: ElementCreationOptions) {
+      const el = originalCreateElement(tagName, options)
       if (tagName === "a") {
         capturedAnchor = el as HTMLAnchorElement
       }
@@ -319,9 +319,10 @@ describe("ImageLightbox", () => {
     await user.click(downloadBtn)
 
     // Verify fallback anchor was created with direct src
-    expect(capturedAnchor?.href).toContain("example.com/image.png")
-    expect(capturedAnchor?.target).toBe("_blank")
-    expect(capturedAnchor?.rel).toBe("noopener noreferrer")
+    const anchor = capturedAnchor as HTMLAnchorElement | null
+    expect(anchor?.href).toContain("example.com/image.png")
+    expect(anchor?.target).toBe("_blank")
+    expect(anchor?.rel).toBe("noopener noreferrer")
 
     // Restore
     document.createElement = originalCreateElement
@@ -343,8 +344,8 @@ describe("ImageLightbox", () => {
 
     const originalCreateElement = document.createElement.bind(document)
     let capturedAnchor: HTMLAnchorElement | null = null
-    document.createElement = function (tagName: string, ...args: unknown[]) {
-      const el = originalCreateElement(tagName, ...args)
+    document.createElement = function (tagName: string, options?: ElementCreationOptions) {
+      const el = originalCreateElement(tagName, options)
       if (tagName === "a") {
         capturedAnchor = el as HTMLAnchorElement
       }
@@ -369,7 +370,7 @@ describe("ImageLightbox", () => {
     const downloadBtn = screen.getByLabelText("Download image")
     await user.click(downloadBtn)
 
-    expect(capturedAnchor?.download).toBe("my-photo.jpg")
+    expect((capturedAnchor as HTMLAnchorElement | null)?.download).toBe("my-photo.jpg")
 
     document.createElement = originalCreateElement
     HTMLAnchorElement.prototype.click = originalClick
@@ -388,8 +389,8 @@ describe("ImageLightbox", () => {
 
     const originalCreateElement = document.createElement.bind(document)
     let capturedAnchor: HTMLAnchorElement | null = null
-    document.createElement = function (tagName: string, ...args: unknown[]) {
-      const el = originalCreateElement(tagName, ...args)
+    document.createElement = function (tagName: string, options?: ElementCreationOptions) {
+      const el = originalCreateElement(tagName, options)
       if (tagName === "a") {
         capturedAnchor = el as HTMLAnchorElement
       }
@@ -414,7 +415,7 @@ describe("ImageLightbox", () => {
     const downloadBtn = screen.getByLabelText("Download image")
     await user.click(downloadBtn)
 
-    expect(capturedAnchor?.download).toBe("image.png")
+    expect((capturedAnchor as HTMLAnchorElement | null)?.download).toBe("image.png")
 
     document.createElement = originalCreateElement
     HTMLAnchorElement.prototype.click = originalClick
@@ -435,8 +436,8 @@ describe("ImageLightbox", () => {
 
     const originalCreateElement = document.createElement.bind(document)
     let capturedAnchor: HTMLAnchorElement | null = null
-    document.createElement = function (tagName: string, ...args: unknown[]) {
-      const el = originalCreateElement(tagName, ...args)
+    document.createElement = function (tagName: string, options?: ElementCreationOptions) {
+      const el = originalCreateElement(tagName, options)
       if (tagName === "a") {
         capturedAnchor = el as HTMLAnchorElement
       }
@@ -451,7 +452,7 @@ describe("ImageLightbox", () => {
     const downloadBtn = screen.getByLabelText("Download image")
     await user.click(downloadBtn)
 
-    expect(capturedAnchor?.download).toBe("My_Screenshot.png")
+    expect((capturedAnchor as HTMLAnchorElement | null)?.download).toBe("My_Screenshot.png")
 
     document.createElement = originalCreateElement
   })
@@ -469,8 +470,8 @@ describe("ImageLightbox", () => {
 
     const originalCreateElement = document.createElement.bind(document)
     let capturedAnchor: HTMLAnchorElement | null = null
-    document.createElement = function (tagName: string, ...args: unknown[]) {
-      const el = originalCreateElement(tagName, ...args)
+    document.createElement = function (tagName: string, options?: ElementCreationOptions) {
+      const el = originalCreateElement(tagName, options)
       if (tagName === "a") {
         capturedAnchor = el as HTMLAnchorElement
       }
@@ -486,7 +487,7 @@ describe("ImageLightbox", () => {
     await user.click(downloadBtn)
 
     // Should be image-<timestamp>.jpeg
-    expect(capturedAnchor?.download).toMatch(/^image-\d+\.jpeg$/)
+    expect((capturedAnchor as HTMLAnchorElement | null)?.download).toMatch(/^image-\d+\.jpeg$/)
 
     document.createElement = originalCreateElement
   })
@@ -504,8 +505,8 @@ describe("ImageLightbox", () => {
 
     const originalCreateElement = document.createElement.bind(document)
     let capturedAnchor: HTMLAnchorElement | null = null
-    document.createElement = function (tagName: string, ...args: unknown[]) {
-      const el = originalCreateElement(tagName, ...args)
+    document.createElement = function (tagName: string, options?: ElementCreationOptions) {
+      const el = originalCreateElement(tagName, options)
       if (tagName === "a") {
         capturedAnchor = el as HTMLAnchorElement
       }
@@ -522,7 +523,7 @@ describe("ImageLightbox", () => {
 
     // Regex /[^\w.-]+/g keeps word chars, dots, and hyphens; replaces everything else with _
     // So "My Photo (2024) - Test!" becomes "My_Photo_2024_-_Test_"
-    expect(capturedAnchor?.download).toBe("My_Photo_2024_-_Test_.png")
+    expect((capturedAnchor as HTMLAnchorElement | null)?.download).toBe("My_Photo_2024_-_Test_.png")
 
     document.createElement = originalCreateElement
   })

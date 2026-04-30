@@ -268,8 +268,8 @@ describe("MarkdownBlock video error handling", () => {
     const video = document.querySelector("video");
     expect(video).not.toBeNull();
 
-    // Verify the video element has an onError handler
-    expect(video?.onError).not.toBeNull();
+    // Verify the video element has an onerror handler
+    expect(video?.onerror).not.toBeNull();
   });
 
   it("renders video element with proper error handling attributes", () => {
@@ -453,8 +453,8 @@ describe("MarkdownBlock multiple videos", () => {
     expect(videos).toHaveLength(2);
 
     // Both videos should have error handlers
-    expect(videos[0].onError).not.toBeNull();
-    expect(videos[1].onError).not.toBeNull();
+    expect(videos[0].onerror).not.toBeNull();
+    expect(videos[1].onerror).not.toBeNull();
   });
 });
 

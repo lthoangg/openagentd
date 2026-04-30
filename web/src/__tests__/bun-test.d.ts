@@ -1,3 +1,10 @@
+// SVG ?react import declarations (mirrors src/vite-env.d.ts for test tsconfig)
+declare module '*.svg?react' {
+  import type { FC, SVGProps } from 'react'
+  const ReactComponent: FC<SVGProps<SVGSVGElement>>
+  export default ReactComponent
+}
+
 // Type declarations for bun:test module
 declare module "bun:test" {
   type AnyFunction = (...args: unknown[]) => unknown
@@ -92,11 +99,15 @@ declare module "bun:test" {
 
   interface ItFunction {
     (label: string, fn: () => void | Promise<void>): void
+    // Tuple spread overload: each([[a, b], [c, d]]) → fn(a, b)
+    each<T extends unknown[]>(cases: T[]): (label: string, fn: (...args: T) => void | Promise<void>) => void
+    // Single-value overload: each([a, b, c]) → fn(a)
     each<T>(cases: T[]): (label: string, fn: (item: T) => void | Promise<void>) => void
   }
 
   interface DescribeFunction {
     (label: string, fn: () => void): void
+    each<T extends unknown[]>(cases: T[]): (label: string, fn: (...args: T) => void) => void
     each<T>(cases: T[]): (label: string, fn: (item: T) => void) => void
   }
 

@@ -105,15 +105,17 @@ describe('draftToServerBody', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.body.transport).toBe('stdio')
-      expect(result.body.command).toBe('npx')
-      expect(result.body.args).toEqual([
-        '@modelcontextprotocol/server-filesystem',
-        '/tmp',
-      ])
-      expect(result.body.env).toEqual({
-        PATH: '/usr/bin',
-        HOME: '/home/user',
-      })
+      if (result.body.transport === 'stdio') {
+        expect(result.body.command).toBe('npx')
+        expect(result.body.args).toEqual([
+          '@modelcontextprotocol/server-filesystem',
+          '/tmp',
+        ])
+        expect(result.body.env).toEqual({
+          PATH: '/usr/bin',
+          HOME: '/home/user',
+        })
+      }
       expect(result.body.enabled).toBe(true)
     }
   })
@@ -136,11 +138,13 @@ describe('draftToServerBody', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.body.transport).toBe('http')
-      expect(result.body.url).toBe('https://mcp.example.com/v1')
-      expect(result.body.headers).toEqual({
-        Authorization: 'Bearer token123',
-        'X-Custom': 'value',
-      })
+      if (result.body.transport === 'http') {
+        expect(result.body.url).toBe('https://mcp.example.com/v1')
+        expect(result.body.headers).toEqual({
+          Authorization: 'Bearer token123',
+          'X-Custom': 'value',
+        })
+      }
       expect(result.body.enabled).toBe(false)
     }
   })
@@ -194,7 +198,7 @@ describe('draftToServerBody', () => {
     }
     const result = draftToServerBody(draft)
     expect(result.ok).toBe(true)
-    if (result.ok) {
+    if (result.ok && result.body.transport === 'stdio') {
       expect(result.body.command).toBe('npx')
     }
   })
@@ -212,7 +216,7 @@ describe('draftToServerBody', () => {
     }
     const result = draftToServerBody(draft)
     expect(result.ok).toBe(true)
-    if (result.ok) {
+    if (result.ok && result.body.transport === 'stdio') {
       expect(result.body.args).toEqual(['arg1', 'arg2'])
     }
   })
@@ -234,7 +238,7 @@ describe('draftToServerBody', () => {
     }
     const result = draftToServerBody(draft)
     expect(result.ok).toBe(true)
-    if (result.ok) {
+    if (result.ok && result.body.transport === 'stdio') {
       expect(result.body.env).toEqual({
         KEY1: 'val1',
         KEY2: 'val2',

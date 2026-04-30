@@ -45,13 +45,13 @@ describe('updateSandboxSettings', () => {
   it('PUTs JSON body and returns the response', async () => {
     const captured: { url?: string; init?: RequestInit } = {}
     const original = globalThis.fetch
-    globalThis.fetch = mock(async (url: RequestInfo | URL, init?: RequestInit) => {
+    globalThis.fetch = mock((async (url: RequestInfo | URL, init?: RequestInit) => {
       captured.url = String(url)
       captured.init = init
       return new Response(JSON.stringify({ denied_patterns: ['**/foo'] }), {
         status: 200,
       })
-    })
+    }) as (...args: unknown[]) => unknown) as unknown as typeof fetch
     try {
       const result = await updateSandboxSettings({ denied_patterns: ['**/foo'] })
       expect(result.denied_patterns).toEqual(['**/foo'])

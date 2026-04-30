@@ -197,6 +197,3 @@ def test_trace_detail_404_when_missing(tmp_path, monkeypatch: pytest.MonkeyPatch
     resp = client.get("/api/observability/traces/" + "0x" + "9" * 32)
     assert resp.status_code == 404
     assert resp.json()["detail"]["reason"] == "trace_not_found"
-
-
-

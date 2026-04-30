@@ -478,6 +478,3 @@ def test_get_trace_accepts_unprefixed_trace_id(
     detail = get_trace("1" * 32)
     assert detail is not None
     assert detail.trace_id == trace
-
-
-
