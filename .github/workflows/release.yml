@@ -114,6 +114,4 @@ jobs:
           gh release upload "${{ needs.release.outputs.tag }}" dist/*.whl dist/*.tar.gz
 
       - name: Publish to PyPI
-        env:
-          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         run: uv publish
