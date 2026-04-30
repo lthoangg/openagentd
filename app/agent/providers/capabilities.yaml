@@ -1,0 +1,192 @@
+# Model capabilities registry — exact model overrides.
+#
+# Only *exact* provider:model entries belong here. Defaults and prefix
+# fallbacks live in capabilities.py (infrastructure logic).
+#
+# Lookup order: exact match (this file) → longest prefix → defaults.
+#
+# Each entry uses *sparse merge* — only specify fields that differ from
+# defaults. Omitted fields inherit the default value.
+#
+# Convention: list flagship / pinned models even when they match the
+# prefix default. They double as a "known good" registry surfaced to
+# operators picking a model. Exotic variants without overrides should
+# stay implicit (handled by the prefix fallback in capabilities.py).
+
+# ── OpenAI ──────────────────────────────────────────────────────────────────
+# Prefix default: vision=true. Entries below are pinned for visibility.
+"openai:gpt-5.5":
+  input:
+    vision: true
+"openai:gpt-5.4":
+  input:
+    vision: true
+"openai:gpt-5.4-mini":
+  input:
+    vision: true
+"openai:gpt-5.4-pro":
+  input:
+    vision: true
+"openai:gpt-5":
+  input:
+    vision: true
+"openai:gpt-5-mini":
+  input:
+    vision: true
+"openai:gpt-4.1":
+  input:
+    vision: true
+
+# ── Codex (ChatGPT subscription proxy) ──────────────────────────────────────
+# Prefix default: vision=false. Vision-capable models must be listed.
+"codex:gpt-5.5":
+  input:
+    vision: true
+"codex:gpt-5.4":
+  input:
+    vision: true
+"codex:gpt-5.4-mini":
+  input:
+    vision: true
+
+# ── Google Gemini (AI Studio) ───────────────────────────────────────────────
+# Prefix default: vision=true. Entries below are pinned for visibility.
+"googlegenai:gemini-3.1-pro-preview":
+  input:
+    vision: true
+"googlegenai:gemini-3-flash-preview":
+  input:
+    vision: true
+"googlegenai:gemini-3.1-flash-lite-preview":
+  input:
+    vision: true
+
+# ── Vertex AI ───────────────────────────────────────────────────────────────
+"vertexai:gemini-3.1-pro-preview":
+  input:
+    vision: true
+"vertexai:gemini-3-flash-preview":
+  input:
+    vision: true
+"vertexai:gemini-3.1-flash-lite-preview":
+  input:
+    vision: true
+
+# ── Gemini CLI ──────────────────────────────────────────────────────────────
+"geminicli:gemini-3.1-pro-preview":
+  input:
+    vision: true
+"geminicli:gemini-3-flash-preview":
+  input:
+    vision: true
+"geminicli:gemini-3.1-flash-lite-preview":
+  input:
+    vision: true
+
+# ── Copilot (proxied models) ────────────────────────────────────────────────
+# Prefix default: vision=false. Vision-capable models must be listed.
+"copilot:gpt-5.4":
+  input:
+    vision: true
+"copilot:gpt-5.4-mini":
+  input:
+    vision: true
+"copilot:claude-opus-4-7":
+  input:
+    vision: true
+"copilot:claude-sonnet-4-6":
+  input:
+    vision: true
+"copilot:claude-haiku-4.5":
+  input:
+    vision: true
+"copilot:gemini-3.1-pro-preview":
+  input:
+    vision: true
+"copilot:gemini-3-flash-preview":
+  input:
+    vision: true
+"copilot:gemini-3.1-flash-lite-preview":
+  input:
+    vision: true
+
+# ── xAI (Grok) ──────────────────────────────────────────────────────────────
+# Prefix default: vision=true. Pinned for visibility.
+"xai:grok-4":
+  input:
+    vision: true
+"xai:grok-4-fast":
+  input:
+    vision: true
+
+# ── DeepSeek ────────────────────────────────────────────────────────────────
+# Prefix default: vision=false. Both v4 models are text-only.
+"deepseek:deepseek-v4-flash":
+  input:
+    vision: false
+"deepseek:deepseek-v4-pro":
+  input:
+    vision: false
+
+# ── AWS Bedrock ─────────────────────────────────────────────────────────────
+# Prefix default: vision=false (conservative — too varied across model families).
+# Anthropic Claude 4.x on Bedrock — all vision capable.
+# Each model has two IDs: in-region (anthropic.*) and global cross-region (global.anthropic.*).
+"bedrock:anthropic.claude-opus-4-7":
+  input:
+    vision: true
+"bedrock:global.anthropic.claude-opus-4-7":
+  input:
+    vision: true
+"bedrock:anthropic.claude-opus-4-6-v1":
+  input:
+    vision: true
+"bedrock:global.anthropic.claude-opus-4-6-v1":
+  input:
+    vision: true
+"bedrock:anthropic.claude-sonnet-4-6":
+  input:
+    vision: true
+"bedrock:global.anthropic.claude-sonnet-4-6":
+  input:
+    vision: true
+"bedrock:anthropic.claude-haiku-4-5-20251001-v1:0":
+  input:
+    vision: true
+"bedrock:global.anthropic.claude-haiku-4-5-20251001-v1:0":
+  input:
+    vision: true
+# Amazon Nova — multimodal models support vision (no global inference IDs)
+"bedrock:amazon.nova-premier-v1:0":
+  input:
+    vision: true
+"bedrock:amazon.nova-pro-v1:0":
+  input:
+    vision: true
+"bedrock:amazon.nova-lite-v1:0":
+  input:
+    vision: true
+
+# ── Z.AI / GLM ──────────────────────────────────────────────────────────────
+# Prefix default: vision=false. Vision-capable VLMs must be listed.
+"zai:glm-5.1":
+  input:
+    vision: false
+"zai:glm-5":
+  input:
+    vision: false
+"zai:glm-5-turbo":
+  input:
+    vision: false
+"zai:glm-4.7":
+  input:
+    vision: false
+"zai:glm-5v-turbo":
+  input:
+    vision: true
+"zai:glm-4.6v":
+  input:
+    vision: true
+"zai:glm-4.5v":
+  input:
+    vision: true
