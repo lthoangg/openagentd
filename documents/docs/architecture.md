@@ -226,3 +226,31 @@ Two-tier logging (application-wide + per-session JSONL via `SessionLogHook`)
 under `{OPENAGENTD_STATE_DIR}/logs/`. See [`logging.md`](./logging.md) for the
 directory layout, event catalogue, configuration knobs, and console-output
 format.
+
+---
+
+## 7. Security & trust model
+
+openagentd is a **single-user, local-first** application. The security model assumes:
+
+- **The operator is the user.** No authentication layer — the backend trusts localhost access.
+- **The host is trusted.** The process has full access to the filesystem, shell, and network within configured sandbox boundaries.
+- **LLM providers are semi-trusted.** API keys are sent to third-party providers (Gemini, etc.). Use local models if this is a concern.
+- **Tool execution is powerful.** Agents can read/write files, run shell commands, and browse the web. `sandbox.workspace_root` limits file tool access, but shell commands run with the privileges of the backend process.
+
+**Do not expose the backend to the public internet** without adding an authentication layer first.
+
+| Layer | Protection |
+|-------|-----------|
+| Filesystem | `sandbox.workspace_root` restricts file tool access; paths outside are rejected. |
+| Shell | Commands run as the backend process user — no additional sandboxing. |
+| API keys | Stored in `.env` (not committed). Never logged or sent to the model. |
+| Session data | Local SQLite only. No remote telemetry or data collection. |
+| SSE streams | No auth on SSE endpoints — localhost access only by design. |
+
+The following are **not** considered vulnerabilities given this trust model:
+
+- An agent executing a destructive shell command (user authorized tool use)
+- Reading files outside `workspace_root` via shell (shell has no sandbox)
+- Prompt injection causing unexpected agent actions (inherent LLM limitation)
+- Session data visible on the local filesystem (single-user design)
