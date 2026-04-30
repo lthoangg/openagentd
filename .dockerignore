@@ -1,0 +1,42 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.venv/
+.env
+htmlcov/
+.coverage
+.pytest_cache/
+.ruff_cache/
+.pyright/
+.mypy_cache/
+
+# Node (web deps are installed fresh in the build stage)
+web/node_modules/
+
+# Build artifacts
+app/_web_dist/
+
+# Local data
+.openagentd/
+workspace/
+logs/
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+# IDE
+.idea/
+.vscode/
+.cursor*/
+
+# Docs (not needed at runtime)
+documents/
+*.md
+!README.md

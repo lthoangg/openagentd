@@ -1,0 +1,44 @@
+repos:
+  # ---------------------------------------------------------------------------
+  # General file hygiene
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        files: ^.*\.(py|ts|tsx|md|yaml|yml|toml|ini)$
+      - id: end-of-file-fixer
+        files: ^.*\.(py|ts|tsx|md|yaml|yml|toml|ini)$
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+        exclude: ^documents/assets/
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # ---------------------------------------------------------------------------
+  # Python – lint + format (app/, cli/, tests/)
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^(app|cli|tests)/
+      - id: ruff-format
+        files: ^(app|cli|tests)/
+
+  # ---------------------------------------------------------------------------
+  # Python – static type checking (ty, same version as dev dep)
+  # ---------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty (app)
+        language: system
+        entry: uv run ty check app/
+        types: [python]
+        files: ^(app|cli)/
+        pass_filenames: false

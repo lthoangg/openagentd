@@ -1,0 +1,101 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openagentd"
+version = "0.1.0"  # keep in sync with app/version.txt
+description = "Self-hosted AI agents — streaming chat, tool use, persistent memory, multi-agent teams"
+readme = "README.md"
+requires-python = ">=3.14"
+license = {text = "Apache-2.0"}
+authors = [{name = "openagentd contributors"}]
+keywords = ["ai", "agents", "llm", "fastapi", "self-hosted", "chat"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Framework :: FastAPI",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "pydantic-settings>=2.13.1",
+    "httpx>=0.28.1",
+    "sqlmodel>=0.0.22",
+    "google-genai>=0.4.0",
+    "jinja2>=3.1.3",
+    "loguru>=0.7.0",
+    "alembic>=1.13.1",
+    "aiosqlite>=0.20.0",
+    "aiofiles>=24.1.0",
+    "greenlet>=3.3.2",
+    "rich>=14.3.3",
+    "prompt-toolkit>=3.0.52",
+    "ddgs>=9.12.0",
+    "markitdown[all]>=0.1.5",
+    "pyyaml>=6.0.3",
+    "fastapi>=0.135.2",
+    "uvicorn[standard]>=0.42.0",
+    "sse-starlette>=3.3.4",
+    "opentelemetry-api>=1.27.0",
+    "opentelemetry-sdk>=1.27.0",
+    "python-multipart>=0.0.24",
+    "prometheus-client>=0.21.0",
+    "python-magic>=0.4.27",
+    "croniter>=6.2.2",
+    "mcp>=1.0.0",
+    "boto3>=1.35.0",
+    "botocore[crt]>=1.43.0",
+]
+
+[project.optional-dependencies]
+# Analytics: enables `/api/usage/summary` and manual/otel_duckdb.py.
+# Install with: `uv sync --extra otel` or `uv add "openagentd[otel]"`.
+otel = [
+    "duckdb>=1.1.0",
+]
+
+[project.urls]
+Repository = "https://github.com/lthoangg/openagentd"
+"Bug Tracker" = "https://github.com/lthoangg/openagentd/issues"
+
+[project.scripts]
+openagentd = "app.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.1.0",
+    "pytest-env>=1.6.0",
+    "respx>=0.22.0",
+    "ruff>=0.15.8",
+    "tiktoken>=0.12.0",
+    "duckdb>=1.1.0",
+    "ty>=0.0.33,<0.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+# Include non-Python data files inside the package: alembic config,
+# migration scripts, and the pre-built web UI.
+[tool.hatch.build.targets.wheel.force-include]
+"app/alembic.ini" = "app/alembic.ini"
+
+# Pre-built web UI assets (populated by `make build-web`) are gitignored
+# build artifacts that must still ship in the wheel.
+[tool.hatch.build]
+artifacts = ["app/_web_dist/**"]
+
+[tool.uv]
+package = true
+
+[tool.ty.src]
+include = ["app"]
+exclude = ["tests", "**/__pycache__", ".venv"]
+
+[tool.ruff]
+target-version = "py313"

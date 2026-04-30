@@ -1,0 +1,23 @@
+services:
+  openagentd:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "4082:4082"
+    volumes:
+      - openagentd-data:/data
+    env_file:
+      - .env
+    # ``environment:`` takes priority over ``env_file:`` in Compose, so this
+    # guards against a stray ``APP_ENV=development`` in ``.env`` that would
+    # otherwise skip Alembic auto-migrate (see app/api/app.py lifespan).
+    environment:
+      - APP_ENV=production
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4082/api/health/live')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  openagentd-data:
