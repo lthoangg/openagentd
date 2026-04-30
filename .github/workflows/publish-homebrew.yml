@@ -15,11 +15,11 @@ jobs:
       - name: Get release info
         id: release
         run: |
-          # Find the latest app-v* tag published by the Release workflow
+          # Find the latest v* tag published by the Release workflow
           RELEASE=$(gh release list --repo lthoangg/openagentd --limit 10 --json tagName,publishedAt \
-            --jq '[.[] | select(.tagName | startswith("app-v"))] | sort_by(.publishedAt) | last')
+            --jq '[.[] | select(.tagName | startswith("v"))] | sort_by(.publishedAt) | last')
           TAG=$(echo "$RELEASE" | jq -r '.tagName')
-          VERSION=$(echo "$TAG" | sed 's/^app-v//')
+          VERSION=$(echo "$TAG" | sed 's/^v//')
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
         env:
