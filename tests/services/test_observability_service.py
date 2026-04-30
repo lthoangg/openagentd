@@ -1,0 +1,534 @@
+"""Tests for app/services/observability_service.py."""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+import pytest
+
+from app.services import observability_service
+from app.services.observability_service import (
+    DuckDBUnavailable,
+    get_trace,
+    list_traces,
+    summarize,
+)
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+
+def _span(
+    *,
+    name: str,
+    end_time_ns: int,
+    duration_ms: float,
+    status: str = "OK",
+    attributes: dict | None = None,
+    trace_id: str = "0x" + "f" * 32,
+    span_id: str = "0x" + "e" * 16,
+    parent_id: str | None = None,
+    kind: str = "INTERNAL",
+) -> dict:
+    return {
+        "name": name,
+        "trace_id": trace_id,
+        "span_id": span_id,
+        "parent_id": parent_id,
+        "kind": kind,
+        "start_time": end_time_ns - int(duration_ms * 1_000_000),
+        "end_time": end_time_ns,
+        "duration_ms": duration_ms,
+        "status": status,
+        "attributes": attributes or {},
+        "events": [],
+        "resource": {"service.name": "openagentd"},
+    }
+
+
+def _write_spans(path: Path, spans: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        for s in spans:
+            f.write(json.dumps(s) + "\n")
+
+
+def _point_openagentd_at(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    # Observability reads spans from ``{STATE_DIR}/otel/spans`` now — point
+    # STATE_DIR at tmp_path so the test's ``tmp_path/otel/spans`` layout stays
+    # as-is.  We also need to flush the cached settings singleton, since
+    # observability_service imports ``settings`` at request time; but the
+    # service re-imports inside ``_spans_dir``, so a plain env override works.
+    from app.core import config as _config
+
+    monkeypatch.setattr(
+        _config.settings, "OPENAGENTD_STATE_DIR", str(tmp_path), raising=True
+    )
+    return tmp_path / "otel" / "spans"
+
+
+# ── Empty / missing ───────────────────────────────────────────────────────────
+
+
+def test_summarize_returns_empty_when_spans_dir_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    _point_openagentd_at(tmp_path, monkeypatch)
+    result = summarize(days=7)
+    assert result.total_turns == 0
+    assert result.total_llm_calls == 0
+    assert result.daily_turns == []
+
+
+def test_summarize_returns_empty_when_no_files_in_window(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    spans_dir = _point_openagentd_at(tmp_path, monkeypatch)
+    # File from 200 days ago — outside the 7-day window.
+    old = datetime.now(timezone.utc) - timedelta(days=200)
+    old_key = old.strftime("%Y-%m-%d-%H")
+    _write_spans(
+        spans_dir / f"{old_key}.jsonl",
+        [
+            _span(
+                name="agent_run lead",
+                end_time_ns=int(old.timestamp() * 1e9),
+                duration_ms=1.0,
+            )
+        ],
+    )
+    result = summarize(days=7)
+    assert result.total_turns == 0
+
+
+# ── Happy path ────────────────────────────────────────────────────────────────
+
+
+def test_summarize_aggregates_turns_llm_tools(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    spans_dir = _point_openagentd_at(tmp_path, monkeypatch)
+    now = datetime.now(timezone.utc)
+    key = now.strftime("%Y-%m-%d-%H")
+    ts_ns = int(now.timestamp() * 1e9)
+
+    spans = [
+        # 2 turns
+        _span(name="agent_run lead", end_time_ns=ts_ns, duration_ms=1200.0),
+        _span(
+            name="agent_run lead", end_time_ns=ts_ns, duration_ms=800.0, status="ERROR"
+        ),
+        # 3 LLM calls
+        _span(
+            name="chat gpt-4o",
+            end_time_ns=ts_ns,
+            duration_ms=500.0,
+            attributes={
+                "gen_ai.request.model": "gpt-4o",
+                "gen_ai.usage.input_tokens": 1000,
+                "gen_ai.usage.output_tokens": 200,
+            },
+        ),
+        _span(
+            name="chat gpt-4o",
+            end_time_ns=ts_ns,
+            duration_ms=700.0,
+            attributes={
+                "gen_ai.request.model": "gpt-4o",
+                "gen_ai.usage.input_tokens": 500,
+                "gen_ai.usage.output_tokens": 100,
+            },
+        ),
+        _span(
+            name="chat gemini-flash",
+            end_time_ns=ts_ns,
+            duration_ms=200.0,
+            attributes={
+                "gen_ai.request.model": "gemini-flash",
+                "gen_ai.usage.input_tokens": 400,
+                "gen_ai.usage.output_tokens": 80,
+            },
+        ),
+        # 2 tool calls (one errored)
+        _span(
+            name="execute_tool read",
+            end_time_ns=ts_ns,
+            duration_ms=10.0,
+            attributes={"gen_ai.tool.name": "read"},
+        ),
+        _span(
+            name="execute_tool web_fetch",
+            end_time_ns=ts_ns,
+            duration_ms=300.0,
+            status="ERROR",
+            attributes={"gen_ai.tool.name": "web_fetch"},
+        ),
+    ]
+    _write_spans(spans_dir / f"{key}.jsonl", spans)
+
+    result = summarize(days=7)
+
+    assert result.total_turns == 2
+    assert result.total_llm_calls == 3
+    assert result.total_tool_calls == 2
+    assert result.total_input_tokens == 1900
+    assert result.total_output_tokens == 380
+    # 1 agent_run + 1 tool in ERROR status
+    assert result.total_errors == 2
+
+    # Latency percentiles
+    assert result.turn_p50_ms > 0
+    assert result.llm_p50_ms > 0
+
+    # Daily bucket
+    assert len(result.daily_turns) == 1
+    assert result.daily_turns[0]["turns"] == 2
+    assert result.daily_turns[0]["errors"] == 1
+
+    # Per-model breakdown
+    models = {m["model"]: m for m in result.by_model}
+    assert models["gpt-4o"]["calls"] == 2
+    assert models["gpt-4o"]["input_tokens"] == 1500
+    assert models["gemini-flash"]["calls"] == 1
+
+    # Per-tool breakdown
+    tools = {t["tool"]: t for t in result.by_tool}
+    assert tools["read"]["calls"] == 1
+    assert tools["read"]["errors"] == 0
+    assert tools["web_fetch"]["calls"] == 1
+    assert tools["web_fetch"]["errors"] == 1
+
+
+def test_summarize_clamps_days(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    _point_openagentd_at(tmp_path, monkeypatch)
+    # Should not raise even with out-of-range input.
+    result = summarize(days=0)
+    assert (result.window_end - result.window_start).days == 1
+    result = summarize(days=500)
+    assert (result.window_end - result.window_start).days == 90
+
+
+def test_summarize_reports_sample_ratio(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    _point_openagentd_at(tmp_path, monkeypatch)
+    monkeypatch.setenv("OTEL_SPAN_SAMPLE_RATIO", "0.25")
+    result = summarize(days=7)
+    assert result.sample_ratio == 0.25
+
+
+# ── Missing DuckDB ────────────────────────────────────────────────────────────
+
+
+def test_summarize_raises_when_duckdb_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    spans_dir = _point_openagentd_at(tmp_path, monkeypatch)
+    # Ensure there's at least one file so the import path is exercised.
+    now = datetime.now(timezone.utc)
+    key = now.strftime("%Y-%m-%d-%H")
+    _write_spans(
+        spans_dir / f"{key}.jsonl",
+        [
+            _span(
+                name="agent_run x",
+                end_time_ns=int(now.timestamp() * 1e9),
+                duration_ms=1.0,
+            )
+        ],
+    )
+
+    # Force the lazy import to fail.
+    def _boom():
+        raise DuckDBUnavailable("test")
+
+    monkeypatch.setattr(observability_service, "_try_import_duckdb", _boom)
+
+    with pytest.raises(DuckDBUnavailable):
+        summarize(days=7)
+
+
+# ── Serialisation ─────────────────────────────────────────────────────────────
+
+
+def test_to_dict_round_trips(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    _point_openagentd_at(tmp_path, monkeypatch)
+    result = summarize(days=7)
+    d = result.to_dict()
+    assert set(d.keys()) == {
+        "window_start",
+        "window_end",
+        "sample_ratio",
+        "totals",
+        "latency_ms",
+        "daily_turns",
+        "by_model",
+        "by_tool",
+    }
+    assert set(d["totals"].keys()) == {
+        "turns",
+        "llm_calls",
+        "tool_calls",
+        "input_tokens",
+        "output_tokens",
+        "errors",
+    }
+
+
+# ── list_traces ───────────────────────────────────────────────────────────────
+
+
+def _write_trace(
+    spans_dir: Path,
+    *,
+    trace_id: str,
+    end_time_ns: int,
+    agent_name: str = "lead",
+    model: str = "gpt-4o",
+    session_id: str = "sess-a",
+    run_id: str = "run-1",
+    with_tool: bool = False,
+    error: bool = False,
+) -> None:
+    """Write an ``agent_run`` + ``chat`` (+ optional ``execute_tool``) trio."""
+    key = datetime.fromtimestamp(end_time_ns / 1e9, tz=timezone.utc).strftime(
+        "%Y-%m-%d-%H"
+    )
+    path = spans_dir / f"{key}.jsonl"
+    root_id = "0x" + "a" * 16
+    spans = [
+        _span(
+            name=f"agent_run {agent_name}",
+            end_time_ns=end_time_ns,
+            duration_ms=1500.0,
+            status="ERROR" if error else "OK",
+            attributes={
+                "gen_ai.agent.name": agent_name,
+                "gen_ai.request.model": model,
+                "gen_ai.conversation.id": session_id,
+                "run_id": run_id,
+                "gen_ai.usage.input_tokens": 1000,
+                "gen_ai.usage.output_tokens": 200,
+            },
+            trace_id=trace_id,
+            span_id=root_id,
+        ),
+        _span(
+            name=f"chat {model}",
+            end_time_ns=end_time_ns - 1_000_000,  # 1 ms earlier
+            duration_ms=400.0,
+            attributes={
+                "gen_ai.operation.name": "chat",
+                "gen_ai.request.model": model,
+                "gen_ai.agent.name": agent_name,
+                "run_id": run_id,
+            },
+            trace_id=trace_id,
+            span_id="0x" + "b" * 16,
+            parent_id=root_id,
+            kind="CLIENT",
+        ),
+    ]
+    if with_tool:
+        spans.append(
+            _span(
+                name="execute_tool read",
+                end_time_ns=end_time_ns - 2_000_000,
+                duration_ms=50.0,
+                attributes={
+                    "gen_ai.operation.name": "execute_tool",
+                    "gen_ai.tool.name": "read",
+                    "gen_ai.agent.name": agent_name,
+                    "run_id": run_id,
+                },
+                trace_id=trace_id,
+                span_id="0x" + "c" * 16,
+                parent_id=root_id,
+            )
+        )
+    _write_spans(path, spans)
+
+
+def test_list_traces_empty_when_no_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    _point_openagentd_at(tmp_path, monkeypatch)
+    assert list_traces(days=7) == []
+
+
+def test_list_traces_returns_one_row_per_agent_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    spans_dir = _point_openagentd_at(tmp_path, monkeypatch)
+    now_ns = int(datetime.now(timezone.utc).timestamp() * 1e9)
+
+    _write_trace(spans_dir, trace_id="0x" + "1" * 32, end_time_ns=now_ns)
+    _write_trace(
+        spans_dir,
+        trace_id="0x" + "2" * 32,
+        end_time_ns=now_ns - 60_000_000_000,  # 60 s earlier
+        with_tool=True,
+        error=True,
+    )
+
+    rows = list_traces(days=7)
+
+    assert len(rows) == 2
+    # Newest first
+    assert rows[0].trace_id == "0x" + "1" * 32
+    assert rows[1].trace_id == "0x" + "2" * 32
+    # Row 0: just a chat span, no tool
+    assert rows[0].llm_calls == 1
+    assert rows[0].tool_calls == 0
+    assert rows[0].error is False
+    # Row 1: one chat + one tool, errored
+    assert rows[1].llm_calls == 1
+    assert rows[1].tool_calls == 1
+    assert rows[1].error is True
+    # Attributes are unpacked into typed columns
+    assert rows[0].agent_name == "lead"
+    assert rows[0].model == "gpt-4o"
+    assert rows[0].session_id == "sess-a"
+    assert rows[0].input_tokens == 1000
+    assert rows[0].output_tokens == 200
+    # start_ms/end_ms are epoch milliseconds (JS-friendly)
+    assert rows[0].end_ms == now_ns // 1_000_000
+    assert rows[0].duration_ms == 1500.0
+
+
+def test_list_traces_pagination(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    spans_dir = _point_openagentd_at(tmp_path, monkeypatch)
+    base_ns = int(datetime.now(timezone.utc).timestamp() * 1e9)
+    for i in range(5):
+        _write_trace(
+            spans_dir,
+            trace_id=f"0x{i:032x}",
+            end_time_ns=base_ns - i * 1_000_000_000,  # space out by 1 s
+            run_id=f"run-{i}",
+        )
+
+    first = list_traces(days=7, limit=2, offset=0)
+    second = list_traces(days=7, limit=2, offset=2)
+    assert [r.run_id for r in first] == ["run-0", "run-1"]
+    assert [r.run_id for r in second] == ["run-2", "run-3"]
+
+
+def test_list_traces_clamps_inputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    _point_openagentd_at(tmp_path, monkeypatch)
+    # Should not raise; should return empty because no files.
+    assert list_traces(days=0, limit=0, offset=-1) == []
+    assert list_traces(days=500, limit=10_000, offset=0) == []
+
+
+# ── get_trace ─────────────────────────────────────────────────────────────────
+
+
+def test_get_trace_returns_none_when_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    _point_openagentd_at(tmp_path, monkeypatch)
+    assert get_trace("0x" + "1" * 32) is None
+
+
+def test_get_trace_returns_all_spans_ordered(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    spans_dir = _point_openagentd_at(tmp_path, monkeypatch)
+    now_ns = int(datetime.now(timezone.utc).timestamp() * 1e9)
+    trace = "0x" + "1" * 32
+    _write_trace(spans_dir, trace_id=trace, end_time_ns=now_ns, with_tool=True)
+
+    detail = get_trace(trace)
+
+    assert detail is not None
+    assert detail.trace_id == trace
+    # 3 spans: agent_run, chat, execute_tool
+    assert len(detail.spans) == 3
+    # Ordered by start_time ASC.  The root ``agent_run`` starts first
+    # (it wraps the others); ``chat`` starts slightly later, and
+    # ``execute_tool`` fires last in the fixture.
+    names_in_order = [s.name for s in detail.spans]
+    assert names_in_order == [
+        "agent_run lead",
+        "chat gpt-4o",
+        "execute_tool read",
+    ]
+    # Full attributes included
+    root = next(s for s in detail.spans if s.name.startswith("agent_run"))
+    assert root.parent_span_id is None
+    assert root.attributes["gen_ai.agent.name"] == "lead"
+    assert root.attributes["gen_ai.usage.input_tokens"] == 1000
+    # Child spans link to the root
+    chat = next(s for s in detail.spans if s.name.startswith("chat"))
+    assert chat.parent_span_id == root.span_id
+    assert chat.kind == "CLIENT"
+
+
+def test_get_trace_strips_null_attributes_unioned_across_span_types(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """DuckDB's ``union_by_name=true`` unions the attribute schema across all
+    spans in the window — so a ``chat`` span's row would otherwise carry
+    ``gen_ai.usage.input_tokens = None`` just because some ``agent_run`` in
+    the same window set it.  The service must strip those Nones so the UI
+    doesn't render rows of em-dashes.
+    """
+    spans_dir = _point_openagentd_at(tmp_path, monkeypatch)
+    now_ns = int(datetime.now(timezone.utc).timestamp() * 1e9)
+    trace = "0x" + "1" * 32
+    _write_trace(spans_dir, trace_id=trace, end_time_ns=now_ns)
+
+    detail = get_trace(trace)
+    assert detail is not None
+
+    chat = next(s for s in detail.spans if s.name.startswith("chat"))
+    # The chat span only sets these four keys — no usage tokens, no
+    # conversation id.  The service must not forward Nones from the union.
+    assert set(chat.attributes.keys()) == {
+        "gen_ai.operation.name",
+        "gen_ai.request.model",
+        "gen_ai.agent.name",
+        "run_id",
+    }
+    # And in particular, usage/conversation keys (set only by agent_run) must
+    # not appear as None on the chat row.
+    assert "gen_ai.usage.input_tokens" not in chat.attributes
+    assert "gen_ai.usage.output_tokens" not in chat.attributes
+    assert "gen_ai.conversation.id" not in chat.attributes
+
+
+def test_get_trace_accepts_unprefixed_trace_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    spans_dir = _point_openagentd_at(tmp_path, monkeypatch)
+    now_ns = int(datetime.now(timezone.utc).timestamp() * 1e9)
+    trace = "0x" + "1" * 32
+    _write_trace(spans_dir, trace_id=trace, end_time_ns=now_ns)
+
+    # Caller passes the hex without "0x" — should still resolve.
+    detail = get_trace("1" * 32)
+    assert detail is not None
+    assert detail.trace_id == trace
+
+
+def test_list_traces_raises_when_duckdb_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    spans_dir = _point_openagentd_at(tmp_path, monkeypatch)
+    _write_trace(
+        spans_dir,
+        trace_id="0x" + "1" * 32,
+        end_time_ns=int(datetime.now(timezone.utc).timestamp() * 1e9),
+    )
+
+    def _boom():
+        raise DuckDBUnavailable("test")
+
+    monkeypatch.setattr(observability_service, "_try_import_duckdb", _boom)
+
+    with pytest.raises(DuckDBUnavailable):
+        list_traces(days=7)
+    with pytest.raises(DuckDBUnavailable):
+        get_trace("0x" + "1" * 32)

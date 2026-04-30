@@ -1,0 +1,560 @@
+"""Tests for GET /api/team/sessions/{session_id}/todos endpoint.
+
+Covers:
+  GET /api/team/sessions/{session_id}/todos → retrieve todo list for session
+
+Requirements validated:
+  - session_id validated as UUID (400 on malformed)
+  - Missing .todos.json returns empty list (fresh session)
+  - Missing workspace dir returns empty list
+  - Invalid JSON in .todos.json returns empty list
+  - JSON list format (old format) returns empty list
+  - Valid .todos.json with items returns TodosResponse with all items
+  - Items missing required fields are skipped (caught by outer except)
+  - Response schema matches TodoItemResponse (task_id, content, status, priority)
+"""
+
+from __future__ import annotations
+
+import json
+import uuid
+
+import pytest
+from fastapi.testclient import TestClient
+
+pytestmark = pytest.mark.usefixtures("setup_db")
+
+
+@pytest.fixture
+def app_no_team():
+    """Create FastAPI app without team."""
+    from app.api.app import create_app
+    from app.services.team_manager import set_team
+
+    app = create_app()
+    set_team(None)
+    yield app
+    set_team(None)
+
+
+@pytest.fixture
+def client(app_no_team):
+    """Create test client."""
+    return TestClient(app_no_team)
+
+
+@pytest.fixture
+def session_id() -> str:
+    """Generate a valid UUID session_id."""
+    return str(uuid.uuid7())
+
+
+class TestGetTodos:
+    """Test suite for GET /api/team/sessions/{session_id}/todos."""
+
+    def test_invalid_session_id_returns_400(self, client):
+        """Malformed session_id (not a UUID) returns 400."""
+        resp = client.get("/api/team/sessions/not-a-uuid/todos")
+        assert resp.status_code == 400
+        assert "Invalid session id" in resp.json()["detail"]
+
+    def test_invalid_session_id_special_chars_returns_400(self, client):
+        """Session_id with special characters returns 400."""
+        resp = client.get("/api/team/sessions/not-uuid-format/todos")
+        assert resp.status_code == 400
+        assert "Invalid session id" in resp.json()["detail"]
+
+    def test_invalid_session_id_malformed_uuid_returns_400(self, client):
+        """Malformed UUID (wrong format) returns 400."""
+        resp = client.get("/api/team/sessions/12345-67890/todos")
+        assert resp.status_code == 400
+        assert "Invalid session id" in resp.json()["detail"]
+
+    def test_missing_todos_file_returns_empty_list(
+        self, client, session_id, tmp_path, monkeypatch
+    ):
+        """Fresh session: .todos.json doesn't exist → returns empty list."""
+        fake_root = tmp_path / "ws"
+        fake_root.mkdir(parents=True)
+
+        from app.api.routes.team import todos as team_routes
+
+        monkeypatch.setattr(team_routes, "workspace_dir", lambda sid: fake_root)
+
+        resp = client.get(f"/api/team/sessions/{session_id}/todos")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"todos": []}
+
+    def test_missing_workspace_dir_returns_empty_list(
+        self, client, session_id, tmp_path, monkeypatch
+    ):
+        """Workspace dir doesn't exist → returns empty list."""
+        fake_root = tmp_path / "does-not-exist"
+
+        from app.api.routes.team import todos as team_routes
+
+        monkeypatch.setattr(team_routes, "workspace_dir", lambda sid: fake_root)
+
+        resp = client.get(f"/api/team/sessions/{session_id}/todos")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"todos": []}
+
+    def test_invalid_json_in_todos_file_returns_empty_list(
+        self, client, session_id, tmp_path, monkeypatch
+    ):
+        """.todos.json contains invalid JSON → returns empty list."""
+        fake_root = tmp_path / "ws"
+        fake_root.mkdir(parents=True)
+        (fake_root / ".todos.json").write_text("{ invalid json }")
+
+        from app.api.routes.team import todos as team_routes
+
+        monkeypatch.setattr(team_routes, "workspace_dir", lambda sid: fake_root)
+
+        resp = client.get(f"/api/team/sessions/{session_id}/todos")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"todos": []}
+
+    def test_json_list_format_returns_empty_list(
+        self, client, session_id, tmp_path, monkeypatch
+    ):
+        """Old format: .todos.json is a JSON list (not dict) → returns empty list."""
+        fake_root = tmp_path / "ws"
+        fake_root.mkdir(parents=True)
+        # Old format: just a list
+        (fake_root / ".todos.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "task_id": "1",
+                        "content": "task",
+                        "status": "open",
+                        "priority": "high",
+                    }
+                ]
+            )
+        )
+
+        from app.api.routes.team import todos as team_routes
+
+        monkeypatch.setattr(team_routes, "workspace_dir", lambda sid: fake_root)
+
+        resp = client.get(f"/api/team/sessions/{session_id}/todos")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"todos": []}
+
+    def test_valid_todos_file_with_single_item(
+        self, client, session_id, tmp_path, monkeypatch
+    ):
+        """Valid .todos.json with one item → returns TodosResponse."""
+        fake_root = tmp_path / "ws"
+        fake_root.mkdir(parents=True)
+        todos_data = {
+            "counter": 1,
+            "items": [
+                {
+                    "task_id": "task-001",
+                    "content": "Buy groceries",
+                    "status": "open",
+                    "priority": "high",
+                }
+            ],
+        }
+        (fake_root / ".todos.json").write_text(json.dumps(todos_data))
+
+        from app.api.routes.team import todos as team_routes
+
+        monkeypatch.setattr(team_routes, "workspace_dir", lambda sid: fake_root)
+
+        resp = client.get(f"/api/team/sessions/{session_id}/todos")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["todos"]) == 1
+        assert body["todos"][0]["task_id"] == "task-001"
+        assert body["todos"][0]["content"] == "Buy groceries"
+        assert body["todos"][0]["status"] == "open"
+        assert body["todos"][0]["priority"] == "high"
+
+    def test_valid_todos_file_with_multiple_items(
+        self, client, session_id, tmp_path, monkeypatch
+    ):
+        """Valid .todos.json with multiple items → returns all items."""
+        fake_root = tmp_path / "ws"
+        fake_root.mkdir(parents=True)
+        todos_data = {
+            "counter": 3,
+            "items": [
+                {
+                    "task_id": "task-001",
+                    "content": "Buy groceries",
+                    "status": "open",
+                    "priority": "high",
+                },
+                {
+                    "task_id": "task-002",
+                    "content": "Write report",
+                    "status": "in_progress",
+                    "priority": "medium",
+                },
+                {
+                    "task_id": "task-003",
+                    "content": "Review PR",
+                    "status": "done",
+                    "priority": "low",
+                },
+            ],
+        }
+        (fake_root / ".todos.json").write_text(json.dumps(todos_data))
+
+        from app.api.routes.team import todos as team_routes
+
+        monkeypatch.setattr(team_routes, "workspace_dir", lambda sid: fake_root)
+
+        resp = client.get(f"/api/team/sessions/{session_id}/todos")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["todos"]) == 3
+        # Verify all items are present
+        task_ids = [item["task_id"] for item in body["todos"]]
+        assert task_ids == ["task-001", "task-002", "task-003"]
+
+    def test_todos_file_with_missing_task_id_field(
+        self, client, session_id, tmp_path, monkeypatch
+    ):
+        """Item missing task_id field → entire list is discarded (caught by outer except)."""
+        fake_root = tmp_path / "ws"
+        fake_root.mkdir(parents=True)
+        todos_data = {
+            "counter": 2,
+            "items": [
+                {
+                    "task_id": "task-001",
+                    "content": "Valid item",
+                    "status": "open",
+                    "priority": "high",
+                },
+                {
+                    # Missing task_id
+                    "content": "Invalid item",
+                    "status": "open",
+                    "priority": "high",
+                },
+            ],
+        }
+        (fake_root / ".todos.json").write_text(json.dumps(todos_data))
+
+        from app.api.routes.team import todos as team_routes
+
+        monkeypatch.setattr(team_routes, "workspace_dir", lambda sid: fake_root)
+
+        resp = client.get(f"/api/team/sessions/{session_id}/todos")
+        assert resp.status_code == 200
+        body = resp.json()
+        # When any item is invalid, the entire list is discarded
+        assert body == {"todos": []}
+
+    def test_todos_file_with_missing_content_field(
+        self, client, session_id, tmp_path, monkeypatch
+    ):
+        """Item missing content field → entire list is discarded."""
+        fake_root = tmp_path / "ws"
+        fake_root.mkdir(parents=True)
+        todos_data = {
+            "counter": 2,
+            "items": [
+                {
+                    "task_id": "task-001",
+                    "content": "Valid item",
+                    "status": "open",
+                    "priority": "high",
+                },
+                {
+                    "task_id": "task-002",
+                    # Missing content
+                    "status": "open",
+                    "priority": "high",
+                },
+            ],
+        }
+        (fake_root / ".todos.json").write_text(json.dumps(todos_data))
+
+        from app.api.routes.team import todos as team_routes
+
+        monkeypatch.setattr(team_routes, "workspace_dir", lambda sid: fake_root)
+
+        resp = client.get(f"/api/team/sessions/{session_id}/todos")
+        assert resp.status_code == 200
+        body = resp.json()
+        # When any item is invalid, the entire list is discarded
+        assert body == {"todos": []}
+
+    def test_todos_file_with_missing_status_field(
+        self, client, session_id, tmp_path, monkeypatch
+    ):
+        """Item missing status field → entire list is discarded."""
+        fake_root = tmp_path / "ws"
+        fake_root.mkdir(parents=True)
+        todos_data = {
+            "counter": 2,
+            "items": [
+                {
+                    "task_id": "task-001",
+                    "content": "Valid item",
+                    "status": "open",
+                    "priority": "high",
+                },
+                {
+                    "task_id": "task-002",
+                    "content": "Invalid item",
+                    # Missing status
+                    "priority": "high",
+                },
+            ],
+        }
+        (fake_root / ".todos.json").write_text(json.dumps(todos_data))
+
+        from app.api.routes.team import todos as team_routes
+
+        monkeypatch.setattr(team_routes, "workspace_dir", lambda sid: fake_root)
+
+        resp = client.get(f"/api/team/sessions/{session_id}/todos")
+        assert resp.status_code == 200
+        body = resp.json()
+        # When any item is invalid, the entire list is discarded
+        assert body == {"todos": []}
+
+    def test_todos_file_with_missing_priority_field(
+        self, client, session_id, tmp_path, monkeypatch
+    ):
+        """Item missing priority field → entire list is discarded."""
+        fake_root = tmp_path / "ws"
+        fake_root.mkdir(parents=True)
+        todos_data = {
+            "counter": 2,
+            "items": [
+                {
+                    "task_id": "task-001",
+                    "content": "Valid item",
+                    "status": "open",
+                    "priority": "high",
+                },
+                {
+                    "task_id": "task-002",
+                    "content": "Invalid item",
+                    "status": "open",
+                    # Missing priority
+                },
+            ],
+        }
+        (fake_root / ".todos.json").write_text(json.dumps(todos_data))
+
+        from app.api.routes.team import todos as team_routes
+
+        monkeypatch.setattr(team_routes, "workspace_dir", lambda sid: fake_root)
+
+        resp = client.get(f"/api/team/sessions/{session_id}/todos")
+        assert resp.status_code == 200
+        body = resp.json()
+        # When any item is invalid, the entire list is discarded
+        assert body == {"todos": []}
+
+    def test_todos_file_with_non_dict_items_are_skipped(
+        self, client, session_id, tmp_path, monkeypatch
+    ):
+        """Items that are not dicts (e.g., strings, numbers) are skipped."""
+        fake_root = tmp_path / "ws"
+        fake_root.mkdir(parents=True)
+        todos_data = {
+            "counter": 3,
+            "items": [
+                {
+                    "task_id": "task-001",
+                    "content": "Valid item",
+                    "status": "open",
+                    "priority": "high",
+                },
+                "not a dict",  # String item
+                123,  # Number item
+            ],
+        }
+        (fake_root / ".todos.json").write_text(json.dumps(todos_data))
+
+        from app.api.routes.team import todos as team_routes
+
+        monkeypatch.setattr(team_routes, "workspace_dir", lambda sid: fake_root)
+
+        resp = client.get(f"/api/team/sessions/{session_id}/todos")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["todos"]) == 1
+        assert body["todos"][0]["task_id"] == "task-001"
+
+    def test_todos_file_with_empty_items_list(
+        self, client, session_id, tmp_path, monkeypatch
+    ):
+        """Valid .todos.json with empty items list → returns empty todos."""
+        fake_root = tmp_path / "ws"
+        fake_root.mkdir(parents=True)
+        todos_data = {"counter": 0, "items": []}
+        (fake_root / ".todos.json").write_text(json.dumps(todos_data))
+
+        from app.api.routes.team import todos as team_routes
+
+        monkeypatch.setattr(team_routes, "workspace_dir", lambda sid: fake_root)
+
+        resp = client.get(f"/api/team/sessions/{session_id}/todos")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"todos": []}
+
+    def test_todos_file_missing_items_key(
+        self, client, session_id, tmp_path, monkeypatch
+    ):
+        """Valid JSON dict but missing 'items' key → returns empty list."""
+        fake_root = tmp_path / "ws"
+        fake_root.mkdir(parents=True)
+        todos_data = {"counter": 0}  # Missing 'items' key
+        (fake_root / ".todos.json").write_text(json.dumps(todos_data))
+
+        from app.api.routes.team import todos as team_routes
+
+        monkeypatch.setattr(team_routes, "workspace_dir", lambda sid: fake_root)
+
+        resp = client.get(f"/api/team/sessions/{session_id}/todos")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"todos": []}
+
+    def test_response_schema_has_required_fields(
+        self, client, session_id, tmp_path, monkeypatch
+    ):
+        """Response items have all required fields: task_id, content, status, priority."""
+        fake_root = tmp_path / "ws"
+        fake_root.mkdir(parents=True)
+        todos_data = {
+            "counter": 1,
+            "items": [
+                {
+                    "task_id": "task-001",
+                    "content": "Test task",
+                    "status": "open",
+                    "priority": "high",
+                }
+            ],
+        }
+        (fake_root / ".todos.json").write_text(json.dumps(todos_data))
+
+        from app.api.routes.team import todos as team_routes
+
+        monkeypatch.setattr(team_routes, "workspace_dir", lambda sid: fake_root)
+
+        resp = client.get(f"/api/team/sessions/{session_id}/todos")
+        assert resp.status_code == 200
+        body = resp.json()
+        item = body["todos"][0]
+        # Verify all required fields are present
+        assert "task_id" in item
+        assert "content" in item
+        assert "status" in item
+        assert "priority" in item
+        # Verify no extra fields (strict schema)
+        assert set(item.keys()) == {"task_id", "content", "status", "priority"}
+
+    def test_todos_file_with_extra_fields_in_items(
+        self, client, session_id, tmp_path, monkeypatch
+    ):
+        """Items with extra fields beyond the required four → extra fields ignored."""
+        fake_root = tmp_path / "ws"
+        fake_root.mkdir(parents=True)
+        todos_data = {
+            "counter": 1,
+            "items": [
+                {
+                    "task_id": "task-001",
+                    "content": "Test task",
+                    "status": "open",
+                    "priority": "high",
+                    "extra_field": "should be ignored",
+                    "another_extra": 123,
+                }
+            ],
+        }
+        (fake_root / ".todos.json").write_text(json.dumps(todos_data))
+
+        from app.api.routes.team import todos as team_routes
+
+        monkeypatch.setattr(team_routes, "workspace_dir", lambda sid: fake_root)
+
+        resp = client.get(f"/api/team/sessions/{session_id}/todos")
+        assert resp.status_code == 200
+        body = resp.json()
+        item = body["todos"][0]
+        # Extra fields should not be in response (Pydantic strips them by default)
+        assert set(item.keys()) == {"task_id", "content", "status", "priority"}
+        assert item["task_id"] == "task-001"
+
+    def test_different_session_ids_are_independent(self, client, tmp_path, monkeypatch):
+        """Different session_ids read from different workspace dirs."""
+        session_id_1 = str(uuid.uuid7())
+        session_id_2 = str(uuid.uuid7())
+
+        fake_root_1 = tmp_path / "ws1"
+        fake_root_1.mkdir(parents=True)
+        todos_data_1 = {
+            "counter": 1,
+            "items": [
+                {
+                    "task_id": "task-001",
+                    "content": "Session 1 task",
+                    "status": "open",
+                    "priority": "high",
+                }
+            ],
+        }
+        (fake_root_1 / ".todos.json").write_text(json.dumps(todos_data_1))
+
+        fake_root_2 = tmp_path / "ws2"
+        fake_root_2.mkdir(parents=True)
+        todos_data_2 = {
+            "counter": 1,
+            "items": [
+                {
+                    "task_id": "task-002",
+                    "content": "Session 2 task",
+                    "status": "done",
+                    "priority": "low",
+                }
+            ],
+        }
+        (fake_root_2 / ".todos.json").write_text(json.dumps(todos_data_2))
+
+        def mock_workspace_dir(sid):
+            if sid == session_id_1:
+                return fake_root_1
+            elif sid == session_id_2:
+                return fake_root_2
+            return tmp_path / "unknown"
+
+        from app.api.routes.team import todos as team_routes
+
+        monkeypatch.setattr(team_routes, "workspace_dir", mock_workspace_dir)
+
+        # Test session 1
+        resp1 = client.get(f"/api/team/sessions/{session_id_1}/todos")
+        assert resp1.status_code == 200
+        body1 = resp1.json()
+        assert len(body1["todos"]) == 1
+        assert body1["todos"][0]["task_id"] == "task-001"
+        assert body1["todos"][0]["content"] == "Session 1 task"
+
+        # Test session 2
+        resp2 = client.get(f"/api/team/sessions/{session_id_2}/todos")
+        assert resp2.status_code == 200
+        body2 = resp2.json()
+        assert len(body2["todos"]) == 1
+        assert body2["todos"][0]["task_id"] == "task-002"
+        assert body2["todos"][0]["content"] == "Session 2 task"
