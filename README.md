@@ -47,6 +47,8 @@ Everything runs locally. Your data stays on your machine.
 
 **See exactly what the agent is doing.** Built-in observability dashboard, backed by OpenTelemetry. Live traces, token usage, tool-call latency, model breakdowns — your own private telemetry, no third-party SaaS.
 
+![Telemetry dashboard — token usage, latency, model breakdown, and trace waterfall](documents/assets/telementry.gif)
+
 **Pick your model.** Gemini, Vertex AI, OpenAI, OpenRouter, ZAI, xAI Grok, DeepSeek, AWS Bedrock, NVIDIA NIM, GitHub Copilot, OpenAI Codex, and local proxies — switch with one env var. No lock-in.
 
 **Build on top of it.** Everything the UI does is a documented HTTP + SSE API. Embed the bundled web UI, build your own, or drive it from a script.
