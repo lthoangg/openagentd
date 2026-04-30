@@ -1,44 +1,17 @@
-import { describe, it, expect, afterEach, mock } from "bun:test"
+import { describe, it, expect, beforeEach, afterEach, mock } from "bun:test"
 import "@testing-library/jest-dom"
 import { render, screen, cleanup } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { AgentView } from "@/components/AgentView"
 import { AgentPane } from "@/components/AgentPane"
+import { useTeamStore } from "@/stores/useTeamStore"
 import type { ContentBlock } from "@/api/types"
 import type { AgentStream } from "@/stores/useTeamStore/types"
 
-// Mock Zustand store — provide a full mock so the module stays usable by
-// other test files that share this Bun worker process.
-const _mockState = {
-  sessionId: "test-session-123",
-  agentStreams: {},
-  activeAgent: null,
-  leadName: null,
-  agentNames: [],
-  sidebarOpen: false,
-  isTeamWorking: false,
-  isConnected: false,
-  error: null,
-  _pendingMessages: [] as { id: string; content: string }[],
-  _sessionGeneration: 0,
-  sessionTitle: null,
-  cacheInvalidations: [],
-}
-
-const _mockUseTeamStore = Object.assign(
-  (selector: (state: typeof _mockState) => unknown) => selector(_mockState),
-  {
-    getState: () => _mockState,
-    setState: (partial: Partial<typeof _mockState>) => Object.assign(_mockState, partial),
-    subscribe: () => () => {},
-    destroy: () => {},
-  }
-)
-
-mock.module("@/stores/useTeamStore", () => ({
-  useTeamStore: _mockUseTeamStore,
-}))
-
+// Seed sessionId so AgentView/AgentPane workspace links work
+beforeEach(() => {
+  useTeamStore.setState({ sessionId: "test-session-123" })
+})
 
 
 afterEach(cleanup)
