@@ -75,7 +75,7 @@ function renderWithQueryClient(component: React.ReactNode) {
 
 // Reset fetch after each test
 afterEach(() => {
-  globalThis.fetch = undefined as any
+  globalThis.fetch = undefined as typeof fetch
 })
 
 describe("TextPreview", () => {

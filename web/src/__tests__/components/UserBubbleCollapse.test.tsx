@@ -8,7 +8,7 @@ import type { ContentBlock, AgentStream } from "@/api/types"
 
 // Mock Zustand store
 mock.module("@/stores/useTeamStore", () => ({
-  useTeamStore: (selector: (state: any) => any) => {
+  useTeamStore: (selector: (state: { sessionId: string }) => unknown) => {
     const mockState = { sessionId: "test-session-123" }
     return selector(mockState)
   },
@@ -36,9 +36,9 @@ mock.module("@/components/FileCard", () => ({
 }))
 
 mock.module("@/components/AssistantTurnFooter", () => ({
-  AssistantTurn: ({ blocks, renderBlock }: any) => (
+  AssistantTurn: ({ blocks, renderBlock }: { blocks: ContentBlock[]; renderBlock: (args: { block: ContentBlock; isStreaming: boolean; isLast: boolean }) => import("react").ReactNode }) => (
     <div data-testid="assistant-turn">
-      {blocks.map((block: any, idx: number) => (
+      {blocks.map((block, idx: number) => (
         <div key={idx}>{renderBlock({ block, isStreaming: false, isLast: false })}</div>
       ))}
     </div>

@@ -57,7 +57,17 @@ def _build_member(tmp_path: Path, fm: dict, body: str = "You are X.") -> TeamMem
 # ── Refresh (start-of-turn rebuild) ──────────────────────────────────────────
 
 
-def test_refresh_replaces_agent_in_place(_settings_dirs: Path) -> None:
+def test_refresh_replaces_agent_in_place(
+    _settings_dirs: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.agent.loader as _loader
+
+    monkeypatch.setattr(
+        _loader,
+        "build_provider",
+        _provider_factory(),
+    )
+
     member = _build_member(
         _settings_dirs, {"name": "worker", "model": "openai:v1", "tools": []}
     )
@@ -100,8 +110,18 @@ def test_refresh_keeps_agent_on_parse_failure(_settings_dirs: Path) -> None:
     assert member._config_dirty is False  # cleared to avoid loop
 
 
-def test_refresh_reinjects_teammates_section(_settings_dirs: Path) -> None:
+def test_refresh_reinjects_teammates_section(
+    _settings_dirs: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """`## Teammates` is loader-side; refresh must re-inject it."""
+    import app.agent.loader as _loader
+
+    monkeypatch.setattr(
+        _loader,
+        "build_provider",
+        _provider_factory(),
+    )
+
     worker = _build_member(_settings_dirs, {"name": "worker", "model": "openai:v1"})
     peer = _build_member(_settings_dirs, {"name": "peer", "model": "openai:v1"})
 
