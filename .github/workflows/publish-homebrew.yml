@@ -26,16 +26,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download sdist from GitHub release
+      - name: Download sdist from PyPI
         run: |
           VERSION="${{ steps.release.outputs.version }}"
-          TAG="${{ steps.release.outputs.tag }}"
-          gh release download "${TAG}" \
-            --repo lthoangg/openagentd \
-            --pattern "openagentd-${VERSION}.tar.gz" \
-            --output openagentd.tar.gz
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          curl -fSL \
+            "https://files.pythonhosted.org/packages/source/o/openagentd/openagentd-${VERSION}.tar.gz" \
+            -o openagentd.tar.gz
 
       - name: Compute SHA-256
         id: hash
