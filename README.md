@@ -74,6 +74,8 @@ openagentd init   # pick provider + API key, install default agents
 openagentd        # http://localhost:4082
 ```
 
+![Installing openagentd with uv tool install](documents/assets/openagentd-install.gif)
+
 Other install options (pip, pipx, from source) — see [`documents/docs/install.md`](documents/docs/install.md).
 
 ---
