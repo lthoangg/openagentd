@@ -4,7 +4,8 @@ import { render, screen, cleanup } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { AgentView } from "@/components/AgentView"
 import { AgentPane } from "@/components/AgentPane"
-import type { ContentBlock, AgentStream } from "@/api/types"
+import type { ContentBlock } from "@/api/types"
+import type { AgentStream } from "@/stores/useTeamStore/types"
 
 // Mock Zustand store
 mock.module("@/stores/useTeamStore", () => ({
@@ -479,13 +480,16 @@ describe("AgentPane — UserBubble collapse feature", () => {
   const createMockStream = (blocks: ContentBlock[]): AgentStream => ({
     blocks,
     currentBlocks: [],
-    status: "idle",
+    currentText: "",
+    currentThinking: "",
+    status: "available",
     usage: {
       promptTokens: 0,
       completionTokens: 0,
       totalTokens: 0,
       cachedTokens: 0,
     },
+    _completionBase: 0,
     model: "gpt-4",
     lastError: null,
   })

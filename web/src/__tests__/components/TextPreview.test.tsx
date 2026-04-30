@@ -42,7 +42,8 @@ function mockFetchResponse(
   response: { ok: boolean; status: number; text?: string; json?: unknown },
 ) {
   const originalFetch = globalThis.fetch
-  const fetchMock = mock(async (url: string | Request) => {
+  const fetchMock = mock(async (...args: unknown[]) => {
+    const url = args[0] as string | Request
     const urlStr = typeof url === "string" ? url : url.url
     if (matcher(urlStr)) {
       return {
@@ -75,7 +76,7 @@ function renderWithQueryClient(component: React.ReactNode) {
 
 // Reset fetch after each test
 afterEach(() => {
-  globalThis.fetch = undefined as typeof fetch
+  globalThis.fetch = undefined as unknown as typeof fetch
 })
 
 describe("TextPreview", () => {
