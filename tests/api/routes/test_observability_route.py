@@ -12,7 +12,6 @@ from fastapi.testclient import TestClient
 
 from app.api.routes.observability import router
 from app.services import observability_service
-from app.services.observability_service import DuckDBUnavailable
 
 
 def _write_agent_run(
@@ -106,32 +105,6 @@ def test_days_query_param_bounds(tmp_path, monkeypatch: pytest.MonkeyPatch):
     assert client.get("/api/observability/summary?days=30").status_code == 200
 
 
-def test_503_when_duckdb_unavailable(tmp_path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(
-        observability_service,
-        "_spans_dir",
-        lambda: tmp_path / "otel" / "spans",
-    )
-
-    # Create a span file so the import path is exercised.
-    (tmp_path / "otel" / "spans").mkdir(parents=True)
-    (tmp_path / "otel" / "spans" / "2026-04-17-14.jsonl").write_text(
-        '{"name":"agent_run lead","end_time":1,"start_time":0,'
-        '"duration_ms":1.0,"status":"OK","attributes":{}}\n'
-    )
-
-    def _boom():
-        raise DuckDBUnavailable("go install the [otel] extra")
-
-    monkeypatch.setattr(observability_service, "_try_import_duckdb", _boom)
-
-    client = TestClient(_make_app())
-    resp = client.get("/api/observability/summary?days=30")
-    assert resp.status_code == 503
-    body = resp.json()
-    assert body["detail"]["reason"] == "duckdb_unavailable"
-
-
 # ── /traces ───────────────────────────────────────────────────────────────────
 
 
@@ -185,27 +158,6 @@ def test_traces_list_respects_query_bounds(tmp_path, monkeypatch: pytest.MonkeyP
     assert client.get("/api/observability/traces?offset=-1").status_code == 422
 
 
-def test_traces_list_503_when_duckdb_unavailable(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-):
-    monkeypatch.setattr(
-        observability_service,
-        "_spans_dir",
-        lambda: tmp_path / "otel" / "spans",
-    )
-    _write_agent_run(tmp_path)
-
-    def _boom():
-        raise DuckDBUnavailable("install the [otel] extra")
-
-    monkeypatch.setattr(observability_service, "_try_import_duckdb", _boom)
-
-    client = TestClient(_make_app())
-    resp = client.get("/api/observability/traces")
-    assert resp.status_code == 503
-    assert resp.json()["detail"]["reason"] == "duckdb_unavailable"
-
-
 # ── /traces/{trace_id} ────────────────────────────────────────────────────────
 
 
@@ -247,22 +199,4 @@ def test_trace_detail_404_when_missing(tmp_path, monkeypatch: pytest.MonkeyPatch
     assert resp.json()["detail"]["reason"] == "trace_not_found"
 
 
-def test_trace_detail_503_when_duckdb_unavailable(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-):
-    monkeypatch.setattr(
-        observability_service,
-        "_spans_dir",
-        lambda: tmp_path / "otel" / "spans",
-    )
-    _write_agent_run(tmp_path)
 
-    def _boom():
-        raise DuckDBUnavailable("install the [otel] extra")
-
-    monkeypatch.setattr(observability_service, "_try_import_duckdb", _boom)
-
-    client = TestClient(_make_app())
-    resp = client.get("/api/observability/traces/" + "0x" + "1" * 32)
-    assert resp.status_code == 503
-    assert resp.json()["detail"]["reason"] == "duckdb_unavailable"

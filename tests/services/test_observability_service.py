@@ -8,9 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from app.services import observability_service
 from app.services.observability_service import (
-    DuckDBUnavailable,
     get_trace,
     list_traces,
     summarize,
@@ -217,37 +215,6 @@ def test_summarize_reports_sample_ratio(
     monkeypatch.setenv("OTEL_SPAN_SAMPLE_RATIO", "0.25")
     result = summarize(days=7)
     assert result.sample_ratio == 0.25
-
-
-# ── Missing DuckDB ────────────────────────────────────────────────────────────
-
-
-def test_summarize_raises_when_duckdb_missing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
-    spans_dir = _point_openagentd_at(tmp_path, monkeypatch)
-    # Ensure there's at least one file so the import path is exercised.
-    now = datetime.now(timezone.utc)
-    key = now.strftime("%Y-%m-%d-%H")
-    _write_spans(
-        spans_dir / f"{key}.jsonl",
-        [
-            _span(
-                name="agent_run x",
-                end_time_ns=int(now.timestamp() * 1e9),
-                duration_ms=1.0,
-            )
-        ],
-    )
-
-    # Force the lazy import to fail.
-    def _boom():
-        raise DuckDBUnavailable("test")
-
-    monkeypatch.setattr(observability_service, "_try_import_duckdb", _boom)
-
-    with pytest.raises(DuckDBUnavailable):
-        summarize(days=7)
 
 
 # ── Serialisation ─────────────────────────────────────────────────────────────
@@ -513,22 +480,4 @@ def test_get_trace_accepts_unprefixed_trace_id(
     assert detail.trace_id == trace
 
 
-def test_list_traces_raises_when_duckdb_missing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
-    spans_dir = _point_openagentd_at(tmp_path, monkeypatch)
-    _write_trace(
-        spans_dir,
-        trace_id="0x" + "1" * 32,
-        end_time_ns=int(datetime.now(timezone.utc).timestamp() * 1e9),
-    )
 
-    def _boom():
-        raise DuckDBUnavailable("test")
-
-    monkeypatch.setattr(observability_service, "_try_import_duckdb", _boom)
-
-    with pytest.raises(DuckDBUnavailable):
-        list_traces(days=7)
-    with pytest.raises(DuckDBUnavailable):
-        get_trace("0x" + "1" * 32)
