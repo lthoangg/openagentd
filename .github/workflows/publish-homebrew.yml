@@ -29,9 +29,8 @@ jobs:
       - name: Download sdist from PyPI
         run: |
           VERSION="${{ steps.release.outputs.version }}"
-          curl -fSL \
-            "https://files.pythonhosted.org/packages/source/o/openagentd/openagentd-${VERSION}.tar.gz" \
-            -o openagentd.tar.gz
+          URL=$(curl -fsSL "https://pypi.org/pypi/openagentd/${VERSION}/json" | python3 -c "import sys,json; d=json.load(sys.stdin); print([u['url'] for u in d['urls'] if u['packagetype']=='sdist'][0])")
+          curl -fSL "$URL" -o openagentd.tar.gz
 
       - name: Compute SHA-256
         id: hash
