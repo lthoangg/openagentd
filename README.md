@@ -5,7 +5,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev/)
 
-**Your on-machine multi-agent system.** A personal AI assistant OS that runs locally — chat, tools, persistent memory, teams of agents that coordinate, all on your machine.
+**Your on-machine multi-agent system.** A long-running local service with a web cockpit, persistent memory, and a team of agents that coordinate to get real work done. Everything stays on your hardware.
 
 [Documentation](documents/docs/index.md)
 
@@ -13,169 +13,68 @@
 
 ---
 
-## What it is
-
-OpenAgentd is a **personal AI assistant OS** — a long-running service on your machine where agents browse the web, read and write your files, run shell commands, remember things across sessions, and coordinate as a team to get real work done.
-
-Think of it as the layer between you and your models: a workspace, a memory, a team of agents, and a UI to drive them — all under your control, all on your hardware.
-
-Everything runs locally. Your data stays on your machine.
-
-![OpenAgentd architecture](documents/assets/openagentd-architecture.png)
-
----
-
 ## What you get
 
-**A cockpit, not a chat box.** Command palette (Ctrl+P), keyboard shortcuts, drag-and-drop images and documents, full-screen image viewer, and an inspector that shows every tool call the agent made and what came back. Built for both casual users and power users driving the system.
+**A cockpit, not a chat box.** Command palette (Ctrl+P), drag-and-drop files, full-screen image viewer, and an inspector that shows every tool call and what came back.
 
 ![Command palette — fuzzy search across sessions, agents, files, and actions](documents/assets/command-pallete.gif)
 
-**Agents that can actually do things.** Read and edit your files, run shell commands, search and fetch the web, manage to-do lists, schedule tasks for later, and generate images and videos. Drop in a skill `.md` file or an MCP server to add more — no plugin system to learn.
+**Agents that can actually do things.** Read and write files, run shell commands, search the web, generate images and video, manage todos, schedule tasks. Add more via a skill `.md` or any MCP server.
 
-**A workspace the agent shares with you.** Every file the agent reads, writes, or generates shows up in a side panel you can browse, preview, and download.
+**A workspace the agent shares with you.** Every file the agent touches shows up in a side panel — browse, preview, download.
 
-**Generate images and video on demand.** Built-in image generation (Gemini Imagen, OpenAI) and video generation (Google Gemini Video) — describe what you want, get it back inline, click for full-screen.
+**Persistent memory you can edit.** Three-tier wiki: session notes, synthesised topics, and a `USER.md` injected into every prompt. Browse and edit it from the Wiki panel.
 
-**Persistent memory you can edit.** The agent remembers across sessions via a three-tier wiki: notes written mid-session, topics synthesised by the dream agent, and a `USER.md` you can edit directly. Open the Wiki panel to browse, edit, or delete any of it.
-
-**Run a team, not just one agent.** Lead + worker setup with an async mailbox between agents and a `team_message` tool the lead uses to delegate. The UI shows each agent in its own pane so you can watch them coordinate live — or merge them into a single unified stream.
+**Run a team, not just one agent.** Lead + worker setup with an async mailbox and `team_message` delegation. Watch each agent stream in its own pane — or merge into a single unified view.
 
 ![Unified team view — every agent's turn in one stream, clearly labeled](documents/assets/team-unified.png)
 
-**Schedule it and walk away.** Tell an agent to run a task daily, hourly, or at a specific time using cron, interval, or one-shot schedules. It runs in the background and shows results when you come back. Pair it with the built-in todo manager so the agent — or you — can track what's outstanding.
+**Schedule it and walk away.** Cron, interval, or one-shot schedules. Results appear when you come back.
 
-**See exactly what the agent is doing.** Built-in observability dashboard, backed by OpenTelemetry. Live traces, token usage, tool-call latency, model breakdowns — your own private telemetry, no third-party SaaS.
+**See exactly what the agent is doing.** Built-in OTel dashboard — token usage, latency, trace waterfall. No third-party SaaS, all local.
 
-![Telemetry dashboard — token usage, latency, model breakdown, and trace waterfall](documents/assets/telementry.gif)
-
-**Pick your model.** Gemini, Vertex AI, OpenAI, OpenRouter, ZAI, xAI Grok, DeepSeek, AWS Bedrock, NVIDIA NIM, GitHub Copilot, OpenAI Codex, and local proxies — switch with one env var. No lock-in.
-
-**Build on top of it.** Everything the UI does is a documented HTTP + SSE API. Embed the bundled web UI, build your own, or drive it from a script.
+**Pick your model, no lock-in.** 12 providers — Gemini, OpenAI, OpenRouter, Bedrock, Grok, DeepSeek, and more. Switch with one line in your agent config.
 
 ---
 
 ## Why OpenAgentd
 
-A few things that set OpenAgentd apart from other open-source self-hosted agents:
+|                      | **openagentd**                        | **opencode**        | **openclaw**      | **hermes-agent**     |
+|----------------------|---------------------------------------|---------------------|-------------------|----------------------|
+| **UI**               | Web cockpit                           | Terminal            | Messaging apps    | Messaging / CLI      |
+| **Memory**           | 3-tier wiki, cross-session, editable  | Session only        | Session only      | Cross-session (FTS5) |
+| **Image / video**    | Multi-provider images + native video  | —                   | Via plugins       | Images, no video     |
+| **Hot-reload**       | Everything, no restart                | Restart required    | Partial           | MCP only             |
+| **Self-modification**| Agent edits its own config            | —                   | Partial           | Persona + skills     |
+| **Telemetry**        | Built-in OTel dashboard               | —                   | —                 | —                    |
+| **Embed / API**      | First-class REST + SSE                | Protocol only       | Channel-shaped    | Channel-shaped       |
 
-- **A real web cockpit, not a chat box.** Most self-hosted agents live in a terminal or in your messaging apps. OpenAgentd ships a polished web UI with a command palette, tool-call inspector, memory panel, scheduler, split-grid multi-agent view, and a built-in telemetry dashboard.
-- **Multi-agent by design.** Lead + worker teams with an async inter-agent mailbox. The lead delegates via a `team_message` tool; each agent streams in its own pane so you can watch them coordinate live.
-- **Hot-reload everything.** Drift detection at the end of every turn picks up changes to agent `.md` files, `mcp.json`, and skills without a restart. Includes a `self-healing` skill that lets the agent edit its own configuration.
-- **12 providers, zero lock-in.** Gemini, Vertex AI, OpenAI, OpenRouter, ZAI/GLM, xAI Grok, DeepSeek, AWS Bedrock, NVIDIA NIM, GitHub Copilot, OpenAI Codex, and two local proxy adapters (9Router, CLIProxyAPI). Change one line in your agent config.
-- **Extended reasoning built in.** Set `thinking_level: low | medium | high` per agent. Works across Claude, Gemini, and OpenAI reasoning models — token budget tracked separately.
-- **Batteries included.** Filesystem, shell, web search/fetch, image generation, video generation, scheduler, todos, persistent editable memory, MCP server management, OpenTelemetry-backed `/telemetry` dashboard — shipped, no setup.
-- **Build on top of it.** Everything the UI does is a documented REST + SSE API.
-
-For a side-by-side comparison with [opencode](https://opencode.ai), [openclaw](https://openclaw.ai), and [hermes-agent](https://hermes-agent.nousresearch.com), see [`documents/docs/comparison.md`](documents/docs/comparison.md).
+Full breakdown: [`documents/docs/comparison.md`](documents/docs/comparison.md).
 
 ---
 
 ## Quick start
 
 ```bash
-# macOS / Linux — pick one:
+# macOS / Linux
 uv tool install openagentd        # recommended
 brew tap lthoangg/tap && brew install openagentd
 curl -fsSL https://raw.githubusercontent.com/lthoangg/openagentd/main/install.sh | sh
 
-# Windows:
+# Windows
 irm https://raw.githubusercontent.com/lthoangg/openagentd/main/install.ps1 | iex
-```
 
-```bash
-openagentd init                   # first-time setup: provider, API key, config files
-openagentd                        # API + web UI on http://localhost:4082
-```
-
-One process, one port. Open http://localhost:4082 in your browser.
-
----
-
-## Getting started
-
-### What `openagentd init` does
-
-The wizard runs once (or whenever you want to change providers):
-
-1. **Picks a provider** — choose from 12 LLM providers. Google Gemini and OpenRouter both have free tiers if you want to try without a paid key.
-2. **Picks a model** — select from a curated list or type any model name.
-3. **Handles credentials** — paste an API key (hidden input), or for OAuth providers (GitHub Copilot, OpenAI Codex) it tells you to run `openagentd auth <provider>` after setup.
-4. **Installs your agent team** — copies default agent configs and skills into `~/.config/openagentd/`. Existing files are never overwritten, so re-running `init` is always safe.
-
-### First steps in the UI
-
-Once the app is running at http://localhost:4082:
-
-| What | How |
-|---|---|
-| **Chat** | Type in the input at the bottom and press Enter. The default lead agent is ready. |
-| **Command palette** | `Ctrl+P` / `Cmd+P` — search sessions, agents, files, and actions. |
-| **Switch agents** | Click the agent name in the header to pick a different agent or start a team session. |
-| **Workspace panel** | Every file the agent reads, writes, or generates appears in the left panel. Click to preview or download. |
-| **Memory (Wiki)** | Open the Wiki panel to browse, edit, or delete anything the agent has remembered. Edit `USER.md` to give the agent standing context about you — it's injected into every system prompt. |
-| **Telemetry** | Open `/telemetry` for token usage, latency, and trace explorer. |
-
-### Customising your agent
-
-Edit `~/.config/openagentd/agents/openagentd.md` to change the model, system prompt, tools, or skills. Changes are picked up at the end of the next turn — no restart needed.
-
-```yaml
----
-name: openagentd
-model: googlegenai:gemini-3.1-flash   # change to any provider:model
-thinking_level: medium
-tools: [read, write, shell, web_search, note]
-skills: [self-healing]
----
-
-Your custom system prompt here.
-```
-
-See [Configuration](documents/docs/configuration.md) for the full reference.
-
----
-
-## Install
-
-**macOS / Linux — uv (recommended)**
-
-```bash
-uv tool install openagentd
-```
-
-**macOS / Linux — Homebrew**
-
-```bash
-brew tap lthoangg/tap
-brew install openagentd
-```
-
-**Windows / alternative**
-
-```bash
-pipx install openagentd
-```
-
-**One-line installer (no uv or pipx required)**
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/lthoangg/openagentd/main/install.sh | sh
-```
-
-```powershell
-irm https://raw.githubusercontent.com/lthoangg/openagentd/main/install.ps1 | iex
-```
-
-**Docker**
-
-```bash
+# Docker
 git clone https://github.com/lthoangg/openagentd.git
-cd openagentd && cp .env.example .env
-docker compose up -d              # http://localhost:4082
+cd openagentd && cp .env.example .env && docker compose up -d
 ```
 
-Other options (pip, from source) — see [`documents/docs/install.md`](documents/docs/install.md).
+```bash
+openagentd init   # pick provider + API key, install default agents
+openagentd        # http://localhost:4082
+```
+
+Other install options (pip, pipx, from source) — see [`documents/docs/install.md`](documents/docs/install.md).
 
 ---
 
@@ -295,6 +194,8 @@ OpenAgentd exports OpenTelemetry spans to local JSONL partitions and serves a bu
 - **Prometheus endpoint** — `/metrics` for external scraping
 
 No external collector required. All data stays on your machine.
+
+![Telemetry dashboard — token usage, latency, model breakdown, and trace waterfall](documents/assets/telementry.gif)
 
 ---
 
