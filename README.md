@@ -286,7 +286,7 @@ Tasks appear in the `/scheduler` panel. Pause, resume, or trigger them manually 
 
 ## Observability
 
-When installed with the `[otel]` extra, OpenAgentd exports OpenTelemetry spans to local JSONL partitions and serves a built-in dashboard at `/telemetry`:
+OpenAgentd exports OpenTelemetry spans to local JSONL partitions and serves a built-in dashboard at `/telemetry`:
 
 - **Summary** — token usage, error rates, latency distribution, model breakdown
 - **Trace explorer** — full span waterfall per session, filterable by date range

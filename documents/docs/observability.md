@@ -298,7 +298,7 @@ No hook or app code changes needed — swap the exporter, restart the server.
 
 ## HTTP API
 
-The backend exposes a DuckDB-backed query layer over the JSONL partitions so the `/telemetry` UI (and any other client) can render aggregates, trace lists, and waterfalls without parsing files directly. All endpoints require the `[otel]` extra to be installed (`uv sync --extra otel`) and return `503` when DuckDB is unavailable.
+The backend exposes a DuckDB-backed query layer over the JSONL partitions so the `/telemetry` UI (and any other client) can render aggregates, trace lists, and waterfalls without parsing files directly.
 
 | Method | Path | Returns |
 |--------|------|---------|

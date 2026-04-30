@@ -48,12 +48,6 @@ dependencies = [
     "mcp>=1.0.0",
     "boto3>=1.35.0",
     "botocore[crt]>=1.43.0",
-]
-
-[project.optional-dependencies]
-# Analytics: enables `/api/usage/summary` and manual/otel_duckdb.py.
-# Install with: `uv sync --extra otel` or `uv add "openagentd[otel]"`.
-otel = [
     "duckdb>=1.1.0",
 ]
 
@@ -73,7 +67,6 @@ dev = [
     "respx>=0.22.0",
     "ruff>=0.15.8",
     "tiktoken>=0.12.0",
-    "duckdb>=1.1.0",
     "ty>=0.0.33,<0.1",
 ]
 

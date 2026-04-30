@@ -166,32 +166,8 @@ export interface ObservabilitySummary {
   by_tool: Array<{ tool: string; calls: number; errors: number; p95_ms: number }>
 }
 
-export interface ObservabilityUnavailable {
-  unavailable: true
-  reason: 'duckdb_unavailable'
-  message: string
-}
-
-/**
- * Fetch the observability summary.  When the backend is missing the optional
- * [otel] dependency it returns HTTP 503 with a structured reason — we surface
- * that as a discriminated-union value so the UI can render a dedicated empty
- * state without treating it as a generic error.
- */
-export async function getObservabilitySummary(
-  days: number,
-): Promise<ObservabilitySummary | ObservabilityUnavailable> {
+export async function getObservabilitySummary(days: number): Promise<ObservabilitySummary> {
   const res = await fetch(`${API}/observability/summary?days=${days}`)
-  if (res.status === 503) {
-    const body = await res.json().catch(() => ({}))
-    if (body?.detail?.reason === 'duckdb_unavailable') {
-      return {
-        unavailable: true,
-        reason: 'duckdb_unavailable',
-        message: body.detail.message ?? 'DuckDB not installed.',
-      }
-    }
-  }
   if (!res.ok) throw new Error(`GET /observability/summary failed: ${res.status}`)
   return res.json()
 }
@@ -241,29 +217,14 @@ export interface TraceDetailResponse {
   spans: SpanDetail[]
 }
 
-/**
- * List traces (one row per ``agent_run`` span) in the last ``days`` days.
- * Returns the `ObservabilityUnavailable` sentinel on 503 so the UI can show
- * the same empty state as the summary endpoint.
- */
 export async function listTraces(
   days: number,
   limit = 50,
   offset = 0,
-): Promise<TracesListResponse | ObservabilityUnavailable> {
+): Promise<TracesListResponse> {
   const res = await fetch(
     `${API}/observability/traces?days=${days}&limit=${limit}&offset=${offset}`,
   )
-  if (res.status === 503) {
-    const body = await res.json().catch(() => ({}))
-    if (body?.detail?.reason === 'duckdb_unavailable') {
-      return {
-        unavailable: true,
-        reason: 'duckdb_unavailable',
-        message: body.detail.message ?? 'DuckDB not installed.',
-      }
-    }
-  }
   if (!res.ok) throw new Error(`GET /observability/traces failed: ${res.status}`)
   return res.json()
 }

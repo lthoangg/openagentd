@@ -1,12 +1,11 @@
 /**
- * Page-level chrome: header, loading/error/unavailable states.
+ * Page-level chrome: header, loading/error states.
  * Used by both the summary and trace-detail routes inside `/telemetry`.
  */
 
 import { Link } from '@tanstack/react-router'
-import { Activity, AlertTriangle, Info, Loader2 } from 'lucide-react'
+import { Activity, AlertTriangle, Loader2 } from 'lucide-react'
 import StickmanLogo from '@/assets/stickman.svg?react'
-import type { ObservabilityUnavailable } from '@/api/client'
 
 export function PageHeader({
   isFetching,
@@ -87,24 +86,4 @@ export function ErrorState({
   )
 }
 
-export function UnavailableState({ payload }: { payload: ObservabilityUnavailable }) {
-  return (
-    <div className="rounded-xl border border-(--color-border) bg-(--color-surface-2) p-6">
-      <div className="flex items-start gap-3">
-        <Info size={18} className="mt-0.5 shrink-0 text-(--color-text-muted)" />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-(--color-text)">
-            Observability analytics are disabled
-          </p>
-          <p className="mt-2 text-xs text-(--color-text-muted)">{payload.message}</p>
-          <pre className="mt-3 overflow-x-auto rounded-md border border-(--color-border) bg-(--color-bg) p-3 text-xs text-(--color-text-2)">
-            <code>uv sync --extra otel</code>
-          </pre>
-          <p className="mt-3 text-xs text-(--color-text-muted)">
-            Once installed, restart the server and reload this page.
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
+

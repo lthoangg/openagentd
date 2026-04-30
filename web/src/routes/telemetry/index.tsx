@@ -20,7 +20,7 @@ import {
 } from '@/queries'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { formatShortId } from '@/utils/telemetryFormat'
-import { ErrorState, LoadingState, PageHeader, UnavailableState } from './chrome'
+import { ErrorState, LoadingState, PageHeader } from './chrome'
 import { SummaryView } from './summary/SummaryView'
 import { TracesSection } from './traces/TracesSection'
 import { SpanDetailPanel } from './waterfall/SpanDetailPanel'
@@ -113,8 +113,6 @@ function SummaryRoute({
             message={String(summary.error)}
             onRetry={() => summary.refetch()}
           />
-        ) : summary.data && 'unavailable' in summary.data ? (
-          <UnavailableState payload={summary.data} />
         ) : summary.data ? (
           <div className="flex flex-col gap-6">
             <SummaryView data={summary.data} />

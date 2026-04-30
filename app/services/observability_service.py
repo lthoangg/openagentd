@@ -4,11 +4,6 @@ Reads span files written by :mod:`app.core.otel` (hourly partitions under
 ``{STATE_DIR}/otel/spans/YYYY-MM-DD-HH.jsonl``) via DuckDB, which loads
 JSONL with ``read_json`` in a single query.
 
-DuckDB is an **optional** dependency — installed only when users opt into the
-``[otel]`` extra (``uv sync --extra otel``).  The import is deferred to the
-query path so the server still starts without it; the endpoint returns a
-structured 503 instead.
-
 Design
 ------
 - No state; every call re-queries the files.  File count is small (24 / day ×
@@ -27,11 +22,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import duckdb
 from loguru import logger
-
-
-class DuckDBUnavailable(RuntimeError):
-    """Raised when the ``[otel]`` extra is not installed."""
 
 
 @dataclass(frozen=True)
@@ -224,18 +216,6 @@ def _empty_summary(
     )
 
 
-def _try_import_duckdb():  # noqa: ANN202
-    try:
-        import duckdb  # type: ignore[import-not-found]
-
-        return duckdb
-    except ImportError as exc:
-        raise DuckDBUnavailable(
-            "DuckDB is not installed. Install the optional `[otel]` extra: "
-            "`uv sync --extra otel`  or  `pip install 'openagentd[otel]'`."
-        ) from exc
-
-
 def _candidate_files(window_start: datetime) -> list[Path]:
     """Return sorted JSONL files that *might* contain spans inside the window.
 
@@ -287,9 +267,6 @@ def summarize(days: int = 7) -> ObservabilitySummary:
 
     Args:
         days: Look-back window in days (1–90).
-
-    Raises:
-        DuckDBUnavailable: when the ``[otel]`` extra is not installed.
     """
     days = max(1, min(90, days))
     now = datetime.now(timezone.utc)
@@ -299,7 +276,6 @@ def summarize(days: int = 7) -> ObservabilitySummary:
     if not files:
         return _empty_summary(window_start, now)
 
-    duckdb = _try_import_duckdb()
     con = duckdb.connect(":memory:")
     try:
         _create_spans_window_view(con, files, window_start, now)
@@ -459,9 +435,6 @@ def list_traces(
         days: Look-back window in days (1–90).
         limit: Max rows (1–200).
         offset: Skip this many rows for pagination.
-
-    Raises:
-        DuckDBUnavailable: when the ``[otel]`` extra is not installed.
     """
     days = max(1, min(90, days))
     limit = max(1, min(200, limit))
@@ -473,7 +446,6 @@ def list_traces(
     if not files:
         return []
 
-    duckdb = _try_import_duckdb()
     con = duckdb.connect(":memory:")
     try:
         _create_spans_window_view(con, files, window_start, now)
@@ -564,9 +536,6 @@ def get_trace(trace_id: str, days: int = 30) -> TraceDetail | None:
         trace_id: Hex string with or without the ``0x`` prefix (OTel writes
             JSONL with ``0x``; the UI passes whatever it has).
         days: Look-back window in days (1–90).
-
-    Raises:
-        DuckDBUnavailable: when the ``[otel]`` extra is not installed.
     """
     days = max(1, min(90, days))
     now = datetime.now(timezone.utc)
@@ -582,7 +551,6 @@ def get_trace(trace_id: str, days: int = 30) -> TraceDetail | None:
     if not files:
         return None
 
-    duckdb = _try_import_duckdb()
     con = duckdb.connect(":memory:")
     try:
         _create_spans_window_view(con, files, window_start, now)

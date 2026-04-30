@@ -216,9 +216,9 @@ Returns `{status: "ok", request_id, reply}` on success; 404 if not found or alre
 | `GET` | `/api/health/live` | `{status:"ok",version:"..."}` — always 200 |
 | `GET` | `/api/health/ready` | 200 when DB is reachable; 503 otherwise |
 | `GET` | `/metrics`         | Prometheus exposition (scrape target) |
-| `GET` | `/api/observability/summary?days=N` | span-derived aggregates (turns, tokens, latency, errors, `sample_ratio`) — requires `[otel]` extra |
-| `GET` | `/api/observability/traces?days=N&limit=L&offset=O` | trace list (one row per root `agent_run`), newest first — requires `[otel]` extra |
-| `GET` | `/api/observability/traces/{trace_id}?days=N` | full span tree for one trace; 404 when outside the `days` window — requires `[otel]` extra |
+| `GET` | `/api/observability/summary?days=N` | span-derived aggregates (turns, tokens, latency, errors, `sample_ratio`) |
+| `GET` | `/api/observability/traces?days=N&limit=L&offset=O` | trace list (one row per root `agent_run`), newest first |
+| `GET` | `/api/observability/traces/{trace_id}?days=N` | full span tree for one trace; 404 when outside the `days` window |
 | `GET` | `/api/quote` | `{quote: string, author: string}` — cached daily, fetched from API Ninjas |
 
 ---
