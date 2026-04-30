@@ -52,6 +52,8 @@ jobs:
 
           cat > homebrew-tap/Formula/openagentd.rb <<FORMULA
           class Openagentd < Formula
+            include Language::Python::Virtualenv
+
             desc "On-machine multi-agent AI assistant with a web cockpit"
             homepage "https://github.com/lthoangg/openagentd"
             url "https://files.pythonhosted.org/packages/source/o/openagentd/openagentd-${VERSION}.tar.gz"
