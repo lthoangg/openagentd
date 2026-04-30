@@ -20,13 +20,7 @@ import {
 
 // ── Module mocks ─────────────────────────────────────────────────────────────
 
-mock.module('lucide-react', () => ({
-  AlertCircle: () => null,
-  Check: () => null,
-  ChevronDown: () => null,
-  Search: () => null,
-  X: () => null,
-}))
+mock.module('lucide-react', () => new Proxy({}, { get: () => () => null }))
 
 // Single source of truth for the registry + MCP servers fixture across the
 // test file. Tests can mutate the inner arrays freely; the mocked hooks

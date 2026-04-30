@@ -39,44 +39,7 @@ mock.module("@/stores/useTeamStore", () => ({
   useTeamStore: _mockUseTeamStore,
 }))
 
-// Mock child components that are not under test
-mock.module("@/components/Thinking", () => ({
-  Thinking: ({ content }: { content: string }) => <div data-testid="thinking">{content}</div>,
-}))
 
-mock.module("@/components/ToolCall", () => ({
-  ToolCall: ({ name }: { name: string }) => <div data-testid="tool-call">{name}</div>,
-}))
-
-mock.module("@/components/InboxBubble", () => ({
-  InboxBubble: ({ content }: { content: string }) => <div data-testid="inbox-bubble">{content}</div>,
-}))
-
-mock.module("@/components/ImageAttachment", () => ({
-  ImageAttachment: ({ alt }: { alt: string }) => <div data-testid="image-attachment">{alt}</div>,
-}))
-
-mock.module("@/components/FileCard", () => ({
-  FileCard: ({ name }: { name: string }) => <div data-testid="file-card">{name}</div>,
-}))
-
-mock.module("@/components/AssistantTurnFooter", () => ({
-  AssistantTurn: ({ blocks, renderBlock }: { blocks: ContentBlock[]; renderBlock: (args: { block: ContentBlock; isStreaming: boolean; isLast: boolean }) => import("react").ReactNode }) => (
-    <div data-testid="assistant-turn">
-      {blocks.map((block, idx: number) => (
-        <div key={idx}>{renderBlock({ block, isStreaming: false, isLast: false })}</div>
-      ))}
-    </div>
-  ),
-}))
-
-mock.module("@/components/motion", () => ({
-  StreamingCursor: () => <div data-testid="streaming-cursor" />,
-}))
-
-mock.module("@/utils/markdown", () => ({
-  MarkdownBlock: ({ content }: { content: string }) => <div data-testid="markdown-block">{content}</div>,
-}))
 
 afterEach(cleanup)
 

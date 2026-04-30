@@ -6,11 +6,7 @@ import type { ContentBlock } from "@/api/types"
 afterEach(cleanup)
 
 // Mock lucide-react icons to avoid SVG issues in Happy DOM
-mock.module("lucide-react", () => ({
-  ChevronDown: () => null,
-  Copy: () => null,
-  Check: () => null,
-}))
+mock.module("lucide-react", () => new Proxy({}, { get: () => () => null }))
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 

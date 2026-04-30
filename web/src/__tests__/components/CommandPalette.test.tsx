@@ -44,7 +44,9 @@ describe("CommandPalette", () => {
 
   it("renders footer navigation hint", () => {
     render(<CommandPalette commands={makeCommands()} onClose={() => {}} />)
-    expect(screen.getByText("↑↓ navigate · Enter run · Esc close")).toBeTruthy()
+    expect(screen.getByText("navigate")).toBeTruthy()
+    expect(screen.getByText("run")).toBeTruthy()
+    expect(screen.getByText("close")).toBeTruthy()
   })
 
   it("renders role=dialog with aria-modal", () => {

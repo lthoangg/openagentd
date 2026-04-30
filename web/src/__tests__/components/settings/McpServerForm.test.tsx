@@ -5,10 +5,7 @@ import { McpServerForm } from '@/components/settings/McpServerForm'
 import { emptyDraft, type McpServerDraft } from '@/components/settings/McpServerDraft'
 
 // Mock lucide-react icons to avoid SVG issues in Happy DOM
-mock.module('lucide-react', () => ({
-  Plus: () => null,
-  Trash2: () => null,
-}))
+mock.module('lucide-react', () => new Proxy({}, { get: () => () => null }))
 
 afterEach(cleanup)
 

@@ -21,7 +21,7 @@ describe("InputBar", () => {
     const onSubmit = () => {}
     render(<InputBar onSubmit={onSubmit} />)
 
-    const textarea = screen.getByPlaceholderText("Message openagentd…")
+    const textarea = screen.getByPlaceholderText("Message OpenAgentd…")
     expect(textarea).toBeTruthy()
   })
 

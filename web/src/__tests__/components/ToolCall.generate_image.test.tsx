@@ -1,24 +1,26 @@
 import { describe, it, expect, afterEach, mock } from "bun:test"
+import React from "react"
 import { render, screen, cleanup } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { ToolCall } from "@/components/ToolCall"
 
-// Mock framer-motion to avoid animation complexity in tests
-mock.module("framer-motion", () => ({
-  motion: {
-    div: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-      <div {...props}>{children}</div>
-    ),
+// Mock framer-motion — cache per-tag so React sees stable component references
+const _motionCache: Record<string, React.FC> = {}
+const motionProxy = new Proxy({}, {
+  get: (_t, tag: string) => {
+    if (!_motionCache[tag]) {
+      _motionCache[tag] = ({ children, ...props }: React.HTMLAttributes<HTMLElement>) =>
+        React.createElement(tag, props, children)
+    }
+    return _motionCache[tag]
   },
+})
+mock.module("framer-motion", () => ({
+  motion: motionProxy,
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
-// Mock lucide-react icons to avoid SVG rendering issues
-mock.module("lucide-react", () => ({
-  ChevronRight: () => null,
-  Copy: () => null,
-  Check: () => null,
-}))
+mock.module("lucide-react", () => new Proxy({}, { get: () => () => null }))
 
 afterEach(cleanup)
 
