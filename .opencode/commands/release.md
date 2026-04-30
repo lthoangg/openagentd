@@ -1,6 +1,6 @@
 ---
 applicable_to: Release a new version of OpenAgentd
-description: Bump the version, open a PR, then trigger the GitHub Actions release workflow.
+description: Bump the version, generate release notes, open a PR, then trigger the GitHub Actions release workflow.
 subtask: false
 ---
 
@@ -41,10 +41,56 @@ gh pr create --title "chore: bump version to <version>" --base main
 
 Wait for CI to pass and the PR to be merged.
 
-### 5. Trigger the release workflow
+### 5. Generate release notes
+
+After the PR is merged, collect all commits since the previous tag:
+
+```bash
+PREV_TAG=$(git describe --tags --abbrev=0 HEAD^)
+git log ${PREV_TAG}..HEAD --oneline --no-merges
+```
+
+Group commits by conventional type and write release notes in this format:
+
+```markdown
+## What's Changed
+
+### Features
+- <description> (<short-hash>)
+
+### Fixes
+- <description> (<short-hash>)
+
+### Improvements
+- <description> (<short-hash>)
+
+### Internal
+- <description> (<short-hash>)
+
+**Full Changelog**: https://github.com/lthoangg/openagentd/compare/<prev>...<next>
+```
+
+Rules:
+- `feat:` → **Features**
+- `fix:` → **Fixes**
+- `refactor:`, `perf:` → **Improvements**
+- `chore:`, `docs:`, `style:`, `test:`, `ci:` → **Internal**
+- Skip version bump commits (`chore: bump version`)
+- Use the commit subject (strip the `type:` prefix) as the bullet text
+- Keep bullets concise — one line each
+
+### 6. Trigger the release workflow
 
 ```bash
 gh workflow run release.yml --field confirm=release
 ```
 
 Then run `gh run list --workflow=release.yml --limit=3` to show the queued run.
+
+### 7. Update GitHub release notes
+
+Once the release workflow completes and the GitHub release exists, replace the auto-generated notes:
+
+```bash
+gh release edit v<version> --repo lthoangg/openagentd --notes "<release notes from step 5>"
+```
