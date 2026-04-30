@@ -7,12 +7,36 @@ import { AgentPane } from "@/components/AgentPane"
 import type { ContentBlock } from "@/api/types"
 import type { AgentStream } from "@/stores/useTeamStore/types"
 
-// Mock Zustand store
+// Mock Zustand store — provide a full mock so the module stays usable by
+// other test files that share this Bun worker process.
+const _mockState = {
+  sessionId: "test-session-123",
+  agentStreams: {},
+  activeAgent: null,
+  leadName: null,
+  agentNames: [],
+  sidebarOpen: false,
+  isTeamWorking: false,
+  isConnected: false,
+  error: null,
+  _pendingMessages: [] as { id: string; content: string }[],
+  _sessionGeneration: 0,
+  sessionTitle: null,
+  cacheInvalidations: [],
+}
+
+const _mockUseTeamStore = Object.assign(
+  (selector: (state: typeof _mockState) => unknown) => selector(_mockState),
+  {
+    getState: () => _mockState,
+    setState: (partial: Partial<typeof _mockState>) => Object.assign(_mockState, partial),
+    subscribe: () => () => {},
+    destroy: () => {},
+  }
+)
+
 mock.module("@/stores/useTeamStore", () => ({
-  useTeamStore: (selector: (state: { sessionId: string }) => unknown) => {
-    const mockState = { sessionId: "test-session-123" }
-    return selector(mockState)
-  },
+  useTeamStore: _mockUseTeamStore,
 }))
 
 // Mock child components that are not under test
