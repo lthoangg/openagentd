@@ -1,0 +1,85 @@
+name: Update Homebrew Tap
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+
+jobs:
+  update-tap:
+    name: Update homebrew-tap formula
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Get release info
+        id: release
+        run: |
+          # Find the latest app-v* tag published by the Release workflow
+          RELEASE=$(gh release list --repo lthoangg/openagentd --limit 10 --json tagName,publishedAt \
+            --jq '[.[] | select(.tagName | startswith("app-v"))] | sort_by(.publishedAt) | last')
+          TAG=$(echo "$RELEASE" | jq -r '.tagName')
+          VERSION=$(echo "$TAG" | sed 's/^app-v//')
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download sdist from GitHub release
+        run: |
+          VERSION="${{ steps.release.outputs.version }}"
+          TAG="${{ steps.release.outputs.tag }}"
+          gh release download "${TAG}" \
+            --repo lthoangg/openagentd \
+            --pattern "openagentd-${VERSION}.tar.gz" \
+            --output openagentd.tar.gz
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute SHA-256
+        id: hash
+        run: |
+          echo "sha256=$(sha256sum openagentd.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: lthoangg/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update formula
+        run: |
+          VERSION="${{ steps.release.outputs.version }}"
+          SHA256="${{ steps.hash.outputs.sha256 }}"
+
+          cat > homebrew-tap/Formula/openagentd.rb <<FORMULA
+          class Openagentd < Formula
+            include Language::Python::Virtualenv
+
+            desc "On-machine multi-agent AI assistant with a web cockpit"
+            homepage "https://github.com/lthoangg/openagentd"
+            url "https://files.pythonhosted.org/packages/source/o/openagentd/openagentd-${VERSION}.tar.gz"
+            sha256 "${SHA256}"
+            license "Apache-2.0"
+
+            depends_on "python@3.14"
+
+            def install
+              virtualenv_install_with_resources
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/openagentd --version")
+            end
+          end
+          FORMULA
+
+      - name: Commit and push
+        working-directory: homebrew-tap
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/openagentd.rb
+          git diff --cached --quiet && echo "No changes, skipping" || \
+            (git commit -m "openagentd ${{ steps.release.outputs.tag }}" && git push)

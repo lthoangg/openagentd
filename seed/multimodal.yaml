@@ -1,0 +1,21 @@
+image:
+  # model: openai:gpt-image-2 # "<provider>:<model>"
+  model: googlegenai:gemini-3.1-flash-image-preview
+  # model: codex:gpt-5.4
+  size: 1024x1024
+  quality: auto
+
+video:
+  # Only googlegenai:veo-* is registered today. Reads GOOGLE_API_KEY.
+  # Variants: veo-3.1-generate-preview (full), veo-3.1-fast-generate-preview
+  # (faster), veo-3.1-lite-generate-preview (no references / extension).
+  model: googlegenai:veo-3.1-generate-preview
+  # Defaults applied when the tool call omits the override; the LLM can
+  # still pass aspect_ratio / resolution / duration_seconds per call.
+  aspect_ratio: "16:9" # or "9:16"
+  resolution: "720p" # or "1080p" / "4k" (8s only)
+  duration_seconds: "8" # "4" / "6" / "8"
+  # YAML-only knobs (not exposed as tool params):
+  # person_generation: "allow_adult"   # region-gated; default is provider-side
+  # negative_prompt: "low quality, blurry"
+  # seed: "42"

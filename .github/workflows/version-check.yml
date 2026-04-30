@@ -1,0 +1,35 @@
+name: Version sync check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/version.txt"
+      - "pyproject.toml"
+
+jobs:
+  check:
+    name: Verify version consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check version.txt matches pyproject.toml
+        run: |
+          FILE_VERSION=$(cat app/version.txt | tr -d '[:space:]')
+          TOML_VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+
+          echo "app/version.txt:  $FILE_VERSION"
+          echo "pyproject.toml:   $TOML_VERSION"
+
+          if [ "$FILE_VERSION" != "$TOML_VERSION" ]; then
+            echo ""
+            echo "ERROR: Version mismatch!"
+            echo "  app/version.txt = $FILE_VERSION"
+            echo "  pyproject.toml  = $TOML_VERSION"
+            echo ""
+            echo "Update both files to the same version before merging."
+            exit 1
+          fi
+
+          echo "Versions match."
