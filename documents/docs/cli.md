@@ -106,13 +106,21 @@ Warnings (degraded but bootable) don't affect the exit code. Run this first when
 
 ---
 
-## update
+## update / upgrade
 
 ```bash
-openagentd update
+openagentd upgrade   # preferred
+openagentd update    # alias
 ```
 
-Upgrades openagentd to the latest published version. Uses `uv tool upgrade` if uv is available, otherwise falls back to `pip install --upgrade`.
+Upgrades openagentd to the latest published version. Detects how openagentd was installed and delegates to the right package manager:
+
+| Install method | Command run |
+|---|---|
+| Homebrew | `brew upgrade openagentd` |
+| uv tool | `uv tool upgrade openagentd` |
+| pipx | `pipx upgrade openagentd` |
+| pip (fallback) | `pip install --upgrade openagentd` |
 
 ---
 

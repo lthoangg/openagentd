@@ -35,7 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  openagentd status         # check if running\n"
             "  openagentd logs           # tail the server log\n"
             "  openagentd doctor         # check system health\n"
-            "  openagentd update         # update to the latest version\n"
+            "  openagentd upgrade        # upgrade to the latest version\n"
         ),
     )
     parser.add_argument("--version", action="version", version=f"openagentd v{VERSION}")
@@ -127,10 +127,11 @@ def build_parser() -> argparse.ArgumentParser:
         func=cmd_doctor
     )
 
-    # ── update ────────────────────────────────────────────────────────────────
-    sub.add_parser(
-        "update", help="Update openagentd to the latest version"
-    ).set_defaults(func=cmd_update)
+    # ── update / upgrade ──────────────────────────────────────────────────────
+    for _alias in ("update", "upgrade"):
+        sub.add_parser(
+            _alias, help="Upgrade openagentd to the latest version"
+        ).set_defaults(func=cmd_update)
 
     return parser
 
