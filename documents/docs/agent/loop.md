@@ -254,6 +254,8 @@ Sync point 2 (after `after_model`) persists the `AssistantMessage` with `tool_ca
 
 `AgentTeam.handle_user_message` calls `chat_service.heal_orphaned_tool_calls()` immediately before persisting the new user message. The helper inspects the latest assistant row and inserts a synthetic `ToolMessage("Tool execution was interrupted before a result could be recorded.")` for any `tool_call_id` without a matching reply. Stub timestamps anchor to `last_assistant.created_at + 1µs * (i+1)` so the LLM input order stays `assistant{tool_calls} → tool → … → user` even when wall-clock writes collide. Heal runs in the same transaction as the user-message insert (atomic) and is a no-op when the latest turn is healthy. See `app/services/chat_service.py:heal_orphaned_tool_calls` for the implementation and `tests/services/test_chat_service.py` (`test_heal_*`) for the contract.
 
+A second failure mode occurs when the user stops the agent **during argument streaming** — before the LLM has finished emitting the JSON arguments for a tool call. The assistant row is persisted with a truncated `arguments` string, which causes a `JSONDecodeError` on the next turn when `tool_executor` tries to parse it. `_deserialize_messages` in `app/services/chat_service.py` guards against this: after deserializing DB rows it validates each `tool_call.function.arguments` with `json.loads`; any that fail are silently dropped (with a `deserialize_drop_partial_tool_call` warning) and their paired `ToolMessage` rows are removed. See `tests/services/test_deserialize_partial_tool_calls.py` for the contract.
+
 ---
 
 ## Concurrency safety
@@ -280,5 +282,6 @@ Sync point 2 (after `after_model`) persists the `AssistantMessage` with `tool_ca
 | `tool_done` | INFO | `agent`, `tool`, `elapsed`, `result_len` |
 | `tool_cancelled` | INFO | `agent`, `tool` — tool was cancelled mid-execution by interrupt |
 | `tool_call_orphans_healed` | WARNING | `session_id`, `count`, `ids` — synthetic tool replies inserted before next turn (server crash recovery) |
+| `deserialize_drop_partial_tool_call` | WARNING | `tool`, `id`, `args_prefix` — tool call dropped because arguments were truncated (mid-stream interrupt) |
 | `tool_error` | ERROR | `agent`, `tool`, `elapsed`, `error` |
 | `agent_run_done` | INFO | `agent`, `elapsed`, `iterations`, `total_messages`, `total_tokens` (from `state.usage.total_tokens`) |
