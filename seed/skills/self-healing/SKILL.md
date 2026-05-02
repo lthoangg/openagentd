@@ -39,6 +39,8 @@ rather than relative names.
 1. **Identify the target file.** Ask the user "which agent?" only if ambiguous;
    otherwise pick the agent that matches the conversation (most often the lead).
 2. **Read the current file** so you know the exact existing frontmatter / YAML.
+   If the file doesn't exist yet, note that — you will `write` it from scratch
+   (step 6) rather than `edit` it.
 3. **Compute the minimal diff** — change only the fields the user asked about.
    Never reformat unrelated lines, never drop existing fields.
 4. **Show the diff to the user** as a fenced ```diff block (old → new) with a
@@ -66,6 +68,30 @@ grep -l 'role: lead' {AGENTS_DIR}/*.md
 
 For member agents, match by `name:` — e.g. the executor has `name: executor`
 in its frontmatter. Don't hard-code filenames; agent files are user-renamable.
+
+### Setting up `multimodal.yaml` from scratch
+
+When `generate_image` or `generate_video` returns a "not configured" error
+(i.e. the `image:` / `video:` section is missing from `multimodal.yaml`),
+or when the user explicitly asks to set up image / video generation:
+
+1. **Ask which provider they want** if not already specified. Default suggestion:
+   `openai:gpt-image-2` for images, `googlegenai:veo-3.1-generate-preview` for
+   video. If they have no preference, propose `openai` for images.
+
+2. **Show the config block** for the chosen provider as a fenced `yaml` block.
+
+3. **Write immediately on confirmation** — `write` if the file is new, `edit`
+   if the file exists but the section is missing. Do **not** check env vars or
+   credentials first; credential handling is the tool's responsibility.
+
+4. **After writing**, confirm: "Configured. Takes effect on the next
+   `generate_image` / `generate_video` call — no restart needed."
+
+If the key turns out to be missing at generation time, the tool returns an
+explicit error (e.g. `Error: OPENAI_API_KEY is unset — set it in .env or the
+environment.`). Relay that message to the user as-is; do not try to pre-empt
+it during setup.
 
 ### Provider sanity check before swapping `model`
 
