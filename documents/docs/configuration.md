@@ -439,7 +439,9 @@ All tools below are available. List only the ones you want the agent to use unde
 | `note` | Append a note to the current session's wiki note file |
 | `skill` | Load a skill's instructions (always available — do not list) |
 
-`skill` is **always injected** — you do not need to list it.
+`skill` is **always injected** into every agent — do not list it.
+
+`todo_manage`, `schedule_task`, and `note` are **always injected into the lead agent** — do not list them either.
 
 All filesystem tools (`read`, `write`, `edit`, `ls`, `grep`, `glob`, `rm`) output
 paths **relative to the sandbox workspace root**. Absolute paths are never shown to the model.

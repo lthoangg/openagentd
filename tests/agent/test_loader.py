@@ -909,3 +909,107 @@ def test_factory_raises_clear_error_when_api_key_missing(
 
         with pytest.raises(ValueError, match=match):
             build_provider(model_str)
+
+
+# ---------------------------------------------------------------------------
+# note tool auto-injection for lead agents
+# ---------------------------------------------------------------------------
+
+
+def test_note_tool_auto_injected_into_lead():
+    """note tool is always present on lead agents."""
+    factory, _ = _make_provider_factory()
+    cfg = AgentConfig(name="lead", role="lead", system_prompt="Lead agent")
+    agent = _build_agent(cfg, {}, factory)
+    assert "note" in agent._tools
+    assert agent._tools["note"].name == "note"
+
+
+def test_note_tool_not_injected_into_member():
+    """note tool is NOT present on member agents."""
+    factory, _ = _make_provider_factory()
+    cfg = AgentConfig(name="worker", role="member", system_prompt="Member agent")
+    agent = _build_agent(cfg, {}, factory)
+    assert "note" not in agent._tools
+
+
+def test_note_in_frontmatter_tools_silently_skipped_for_lead():
+    """If a lead agent lists 'note' in tools, it's silently skipped (no duplicate, no error)."""
+    factory, _ = _make_provider_factory()
+    cfg = AgentConfig(name="lead", role="lead", system_prompt="Lead", tools=["note"])
+    agent = _build_agent(cfg, {}, factory)
+    # note should appear exactly once (from auto-injection, not from tools list)
+    assert "note" in agent._tools
+    assert list(agent._tools.keys()).count("note") == 1
+
+
+def test_note_in_frontmatter_tools_silently_skipped_for_member():
+    """If a member agent lists 'note' in tools, it's silently skipped (no error, no injection)."""
+    factory, _ = _make_provider_factory()
+    cfg = AgentConfig(
+        name="worker", role="member", system_prompt="Member", tools=["note"]
+    )
+    agent = _build_agent(cfg, {}, factory)
+    # note should NOT be present (member doesn't get auto-injection, and frontmatter is skipped)
+    assert "note" not in agent._tools
+
+
+def test_note_from_registry_overrides_default():
+    """If tool_registry has a custom 'note' tool, lead agent uses that one."""
+    factory, _ = _make_provider_factory()
+
+    # Create a custom note tool
+    custom_note = _make_tool("note")
+
+    cfg = AgentConfig(name="lead", role="lead", system_prompt="Lead")
+    agent = _build_agent(cfg, {"note": custom_note}, factory)
+
+    assert "note" in agent._tools
+    # The tool should be the custom one (same object)
+    assert agent._tools["note"] is custom_note
+
+
+def test_note_tools_injected_into_lead_only_integration(tmp_path):
+    """Integration test: load_team_from_dir — lead gets note, member does not."""
+    from app.agent.loader import load_team_from_dir
+
+    d = _make_agents_dir(
+        tmp_path,
+        [
+            {"name": "lead", "role": "lead", "model": "zai:glm-5-turbo"},
+            {"name": "worker", "role": "member", "model": "zai:glm-5-turbo"},
+        ],
+    )
+    factory, _ = _make_provider_factory()
+    team = load_team_from_dir(d, provider_factory=factory)
+    assert team is not None
+
+    lead_tool_names = {t.name for t in team.lead.agent._tools.values()}
+    worker_tool_names = {t.name for t in team.members["worker"].agent._tools.values()}
+
+    assert "note" in lead_tool_names
+    assert "note" not in worker_tool_names
+
+
+def test_note_and_todo_both_injected_into_lead():
+    """Both note and todo_manage are injected into lead agents."""
+    factory, _ = _make_provider_factory()
+    cfg = AgentConfig(name="lead", role="lead", system_prompt="Lead")
+    agent = _build_agent(cfg, {}, factory)
+    assert "note" in agent._tools
+    assert "todo_manage" in agent._tools
+    assert "schedule_task" in agent._tools
+
+
+def test_note_deduped_with_other_injected_tools():
+    """If lead agent lists both 'note' and 'todo_manage' in tools, both are deduped."""
+    factory, _ = _make_provider_factory()
+    cfg = AgentConfig(
+        name="lead",
+        role="lead",
+        system_prompt="Lead",
+        tools=["note", "todo_manage"],
+    )
+    agent = _build_agent(cfg, {}, factory)
+    assert list(agent._tools.keys()).count("note") == 1
+    assert list(agent._tools.keys()).count("todo_manage") == 1
