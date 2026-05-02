@@ -23,8 +23,17 @@ Run `git status --short`. Stop if there are uncommitted changes.
 
 ### 4. Bump version via pull request
 
+Check for an open PR targeting `main`:
+
 ```bash
-git checkout -b release/v<version>
+gh pr list --base main --state open
+```
+
+- **PR exists** — commit onto that branch and push. No new branch or PR needed.
+- **No open PR** — commit on the current branch, push, and open a PR:
+
+```bash
+gh pr create --title "chore: bump version to <version>" --base main
 ```
 
 Update version in:
@@ -33,10 +42,10 @@ Update version in:
 - `web/package.json` — `"version": "<version>"`
 
 ```bash
+uv run ruff format --check app/ tests/   # fix formatting issues first
 git add app/version.txt pyproject.toml web/package.json
 git commit -m "chore: bump version to <version>"
-git push origin release/v<version>
-gh pr create --title "chore: bump version to <version>" --base main
+git push origin <branch>
 ```
 
 Wait for CI to pass and the PR to be merged.
