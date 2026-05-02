@@ -936,9 +936,7 @@ def test_note_tool_not_injected_into_member():
 def test_note_in_frontmatter_tools_silently_skipped_for_lead():
     """If a lead agent lists 'note' in tools, it's silently skipped (no duplicate, no error)."""
     factory, _ = _make_provider_factory()
-    cfg = AgentConfig(
-        name="lead", role="lead", system_prompt="Lead", tools=["note"]
-    )
+    cfg = AgentConfig(name="lead", role="lead", system_prompt="Lead", tools=["note"])
     agent = _build_agent(cfg, {}, factory)
     # note should appear exactly once (from auto-injection, not from tools list)
     assert "note" in agent._tools
