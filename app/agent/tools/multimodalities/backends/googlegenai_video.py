@@ -21,14 +21,18 @@ live in the backend.
 
 Supported input modes (all routed here, distinguished by which args are set):
 
-- **text-to-video**: ``images`` / ``last_frame`` / ``reference_images`` all
+- **text-to-video**: ``image`` / ``last_frame`` / ``reference_images`` all
   unset → pure ``prompt``.
-- **image-to-video**: one ``images`` entry → ``image`` on the instance.
-- **first+last interpolation**: one ``images`` entry + ``last_frame`` →
+- **image-to-video**: ``image`` set → ``image`` on the instance.
+- **first+last interpolation**: ``image`` + ``last_frame`` →
   ``image`` + ``lastFrame``.
 - **reference images**: up to 3 ``reference_images`` → ``referenceImages``
   array with ``referenceType: "asset"``. Mutually exclusive with
   ``last_frame`` (Veo won't accept both). The dispatcher enforces this.
+- **video extension**: ``extend_video`` → ``video`` on the instance. Extends
+  a previously generated mp4 by up to 8 s. Mutually exclusive with all other
+  image inputs. Veo only supports 720p for extension; ``resolution`` overrides
+  are silently clamped to ``"720p"`` in ``_build_parameters``.
 
 Per-call overrides the backend understands, mapped to Veo parameters:
 
@@ -112,25 +116,26 @@ def _operation_url(operation_name: str) -> str:
 
 
 def _inline_image(name: str, blob: bytes) -> dict[str, Any]:
-    """Build the snake_case ``inline_data`` shape Veo's REST API expects.
+    """Build the image shape Veo's ``predictLongRunning`` REST endpoint accepts.
 
-    Unlike the Gemini ``:generateContent`` endpoint — which accepts both
-    ``inline_data`` + ``mime_type`` *and* camelCase ``inlineData`` +
-    ``mimeType`` — the Veo ``:predictLongRunning`` endpoint only accepts
-    the snake_case shape. Sending camelCase triggers a 400::
+    Despite the official REST docs showing ``{"inlineData": {"mimeType": ...,
+    "data": ...}}``, the live API rejects that shape with::
 
-        "`inlineData` isn't supported by this model. Please remove it or
-         refer to the Gemini API documentation for supported usage."
+        "`inlineData` isn't supported by this model."
 
-    This matches exactly the payload shape shown in the official Veo REST
-    examples (https://ai.google.dev/gemini-api/docs/video).
+    The correct wire format — confirmed by reading the Google GenAI Python SDK
+    source (``_Image_to_mldev`` in ``models.py``) and verified empirically — is
+    flat fields at the image object level::
+
+        {"bytesBase64Encoded": "<base64>", "mimeType": "image/png"}
+
+    This matches what the SDK sends internally for all image-bearing Veo calls
+    (image-to-video, first+last interpolation, reference images).
     """
     mime, _ = mimetypes.guess_type(name)
     return {
-        "inline_data": {
-            "mime_type": mime or "application/octet-stream",
-            "data": base64.b64encode(blob).decode("ascii"),
-        }
+        "bytesBase64Encoded": base64.b64encode(blob).decode("ascii"),
+        "mimeType": mime or "application/octet-stream",
     }
 
 
@@ -191,6 +196,7 @@ def _build_instance(
     image: tuple[str, bytes] | None,
     last_frame: tuple[str, bytes] | None,
     reference_images: list[tuple[str, bytes]] | None,
+    extend_video: str | None,
 ) -> dict[str, Any]:
     """Assemble the single ``instances[0]`` object for Veo.
 
@@ -200,6 +206,13 @@ def _build_instance(
     - ``last_frame`` requires ``image`` (first frame); solo ``last_frame``
       would be meaningless.
     - ``reference_images`` and ``last_frame`` are mutually exclusive on Veo.
+    - ``extend_video`` is a Files API URI (str) and is mutually exclusive
+      with all image inputs.
+
+    Wire format for ``extend_video``: ``{"uri": "<Files API URI>"}`` — Veo
+    only accepts URIs for video extension; raw bytes (inlineData / encodedVideo)
+    are rejected. Confirmed empirically: the live API requires a URI in the
+    form ``https://generativelanguage.googleapis.com/{version}/files/{id}``.
     """
     instance: dict[str, Any] = {"prompt": prompt}
     if image is not None:
@@ -211,6 +224,8 @@ def _build_instance(
             {"image": _inline_image(name, blob), "referenceType": "asset"}
             for name, blob in reference_images
         ]
+    if extend_video is not None:
+        instance["video"] = {"uri": extend_video}
     return instance
 
 
@@ -335,15 +350,18 @@ async def generate(
     image: tuple[str, bytes] | None = None,
     last_frame: tuple[str, bytes] | None = None,
     reference_images: list[tuple[str, bytes]] | None = None,
+    extend_video: str | None = None,
     overrides: dict[str, str] | None = None,
-) -> bytes | str:
+) -> tuple[bytes, str] | str:
     """Generate a video via ``predictLongRunning`` + polling + download.
 
     All input images are ``(filename, raw_bytes)`` — the dispatcher is
     responsible for sandbox resolution; the backend stays pure HTTP.
 
-    Returns the final mp4 bytes on success, or an ``Error: ...`` string the
-    agent can react to.
+    Returns ``(mp4_bytes, files_api_uri)`` on success, or an ``Error: ...``
+    string the agent can react to. The URI is the Files API download link
+    (``https://generativelanguage.googleapis.com/…``) which callers can
+    surface to the LLM for future video extension calls.
     """
     api_key = _resolve_api_key()
     if not api_key:
@@ -359,8 +377,10 @@ async def generate(
         return "Error: last_frame requires a first-frame image (pass it as images[0])."
     if reference_images and last_frame is not None:
         return "Error: reference_images and last_frame are mutually exclusive on Veo."
+    if extend_video is not None and any((image, last_frame, reference_images)):
+        return "Error: extend_video is mutually exclusive with image, last_frame, and reference_images."
 
-    instance = _build_instance(prompt, image, last_frame, reference_images)
+    instance = _build_instance(prompt, image, last_frame, reference_images, extend_video)
     parameters = _build_parameters(cfg, overrides)
 
     payload: dict[str, Any] = {"instances": [instance]}
@@ -419,7 +439,10 @@ async def generate(
 
         # 3. Download — fresh client with a longer timeout for the mp4 payload.
         async with httpx.AsyncClient(timeout=_DOWNLOAD_TIMEOUT_SECONDS) as dl_client:
-            return await _download_video(dl_client, uri, api_key)
+            mp4 = await _download_video(dl_client, uri, api_key)
+            if isinstance(mp4, str):
+                return mp4  # Error string
+            return mp4, uri
     except httpx.HTTPError as exc:
         # Belt-and-braces for client creation / context failures.
         logger.warning("veo_unexpected_http_error err={}", exc)

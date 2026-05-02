@@ -44,7 +44,7 @@ describe("ToolCall generate_video display", () => {
     const args = JSON.stringify({
       prompt: "Create a video",
       filename: "video",
-      images: ["frame1.png", "frame2.png"],
+      first_frame: "frame1.png",
     });
     render(<ToolCall name="generate_video" args={args} done={true} />);
 
@@ -93,7 +93,7 @@ describe("ToolCall generate_video display", () => {
     const args = JSON.stringify({
       prompt: "Create a smooth animation",
       filename: "animation",
-      images: ["start.png"],
+      first_frame: "start.png",
       last_frame: "end.png",
       reference_images: ["style.png"],
     });
@@ -179,19 +179,18 @@ describe("ToolCall generate_video display", () => {
     expect(statusDot).not.toBeNull();
   });
 
-  it("handles empty images array gracefully", async () => {
+  it("handles absent first_frame gracefully", async () => {
     const user = userEvent.setup();
     const args = JSON.stringify({
       prompt: "Create a video",
       filename: "video",
-      images: [],
     });
     render(<ToolCall name="generate_video" args={args} done={true} />);
 
     const button = screen.getByRole("button");
     await user.click(button);
 
-    // Should not show "first_frame:" line if array is empty
+    // Should not show "first_frame:" line if not provided
     expect(screen.queryByText(/first_frame:/)).toBeNull();
   });
 

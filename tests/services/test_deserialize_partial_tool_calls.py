@@ -7,8 +7,6 @@ orphaned ToolMessages that reference dropped tool calls.
 from __future__ import annotations
 
 import json
-import logging
-from io import StringIO
 from uuid import uuid7
 
 import pytest
@@ -16,10 +14,8 @@ from loguru import logger
 
 from app.agent.schemas.chat import (
     AssistantMessage,
-    FunctionCall,
     HumanMessage,
     SystemMessage,
-    ToolCall,
     ToolMessage,
 )
 from app.models.chat import SessionMessage
@@ -723,7 +719,7 @@ def test_warning_includes_args_prefix(session_id, caplog_loguru):
         ),
     ]
 
-    result = _deserialize_messages(db_messages)
+    _deserialize_messages(db_messages)
 
     assert "deserialize_drop_partial_tool_call" in caplog_loguru.text
     # The prefix should be in the log (first 80 chars)

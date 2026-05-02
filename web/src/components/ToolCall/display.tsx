@@ -358,25 +358,27 @@ export function getToolDisplay(name: string, args: string | undefined): ToolDisp
     // Backend always writes .mp4 today; show the sanitised name for parity
     // with generate_image so the user sees the final on-disk filename.
     const filename = rawFilename ? `${rawFilename.replace(/\.[^.]+$/, '')}.mp4` : null
-    const firstFrames = Array.isArray(parsed.images)
-      ? (parsed.images as unknown[]).map(String).filter((s) => s.length > 0)
-      : []
+    const firstFrame = str(parsed, 'first_frame')
     const lastFrame = str(parsed, 'last_frame')
     const references = Array.isArray(parsed.reference_images)
       ? (parsed.reference_images as unknown[]).map(String).filter((s) => s.length > 0)
       : []
+    const extendVideo = str(parsed, 'extend_video')
     const inputLines: string[] = []
-    if (firstFrames.length > 0) inputLines.push(`first_frame: ${firstFrames.join(', ')}`)
+    if (extendVideo) inputLines.push(`extend_video: ${extendVideo}`)
+    if (firstFrame) inputLines.push(`first_frame: ${firstFrame}`)
     if (lastFrame) inputLines.push(`last_frame: ${lastFrame}`)
     if (references.length > 0) inputLines.push(`references: ${references.join(', ')}`)
     const argsBody = inputLines.length > 0
       ? `${inputLines.join('\n')}\n\n${prompt}`
       : prompt
     return {
-      header: filename
-        ? <>Filming <Arg>{filename}</Arg></>
-        : 'Filming a video…',
-      headerTitle: filename ? `Filming ${filename}` : 'Filming a video…',
+      header: extendVideo
+        ? (filename ? <>Extending <Arg>{filename}</Arg></> : 'Extending a video…')
+        : (filename ? <>Filming <Arg>{filename}</Arg></> : 'Filming a video…'),
+      headerTitle: extendVideo
+        ? (filename ? `Extending ${filename}` : 'Extending a video…')
+        : (filename ? `Filming ${filename}` : 'Filming a video…'),
       formattedArgs: argsBody,
       suppressResult: true,
     }
