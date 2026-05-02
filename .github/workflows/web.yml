@@ -8,6 +8,9 @@ on:
       - ".github/workflows/web.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/web.yml"
 
 jobs:
   web:
@@ -19,37 +22,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check for web changes
-        id: changes
-        run: |
-          git fetch origin main --depth=1
-          CHANGED=$(git diff --name-only origin/main...HEAD -- web/ .github/workflows/web.yml | wc -l)
-          echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
-
       - name: Set up Bun
-        if: steps.changes.outputs.changed != '0'
         uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
-        if: steps.changes.outputs.changed != '0'
         run: bun install --frozen-lockfile
 
       - name: Lint
-        if: steps.changes.outputs.changed != '0'
         run: bun run lint
 
       - name: Type check (app)
-        if: steps.changes.outputs.changed != '0'
         run: bunx tsc -b --noEmit
 
       - name: Type check (tests)
-        if: steps.changes.outputs.changed != '0'
         run: bunx tsc -p tsconfig.test.json --noEmit
 
       - name: Tests
-        if: steps.changes.outputs.changed != '0'
         run: bun test src/__tests__
-
-      - name: No web changes — skipping
-        if: steps.changes.outputs.changed == '0'
-        run: echo "No web changes detected, skipping checks."
