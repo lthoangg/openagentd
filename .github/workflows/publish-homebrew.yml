@@ -63,6 +63,9 @@ jobs:
               python3 = Formula["python@3.14"].opt_bin/"python3.14"
               system python3, "-m", "venv", libexec
               system libexec/"bin/pip", "install", "--no-cache-dir", "--upgrade", "pip"
+              # Build cryptography from source so Mach-O headers have enough
+              # padding for Homebrew's dylib relinking (avoids -headerpad error).
+              system libexec/"bin/pip", "install", "--no-cache-dir", "--no-binary", "cryptography", "cryptography"
               system libexec/"bin/pip", "install", "--no-cache-dir", buildpath
               bin.install_symlink libexec/"bin/openagentd"
             end
