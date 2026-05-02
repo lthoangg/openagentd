@@ -33,6 +33,19 @@ brew tap lthoangg/tap
 brew install openagentd
 ```
 
+To upgrade:
+
+```bash
+openagentd upgrade      # via the built-in upgrade command
+# or directly:
+brew upgrade openagentd
+```
+
+> **Note:** On first install or after a `brew reinstall`, you may see a warning about
+> `Failed changing dylib ID` for the `cryptography` package. This is a cosmetic Homebrew
+> relinking warning — openagentd still works correctly. Run `brew update` before
+> reinstalling to ensure the latest formula is used.
+
 ## Docker
 
 ```bash
