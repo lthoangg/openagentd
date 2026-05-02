@@ -32,8 +32,29 @@ async def plugin():
     }
 ```
 
-**Class-based** — `class Plugin(BaseAgentHook)` for the full hook surface
-(`wrap_model_call`, `before_agent`, `on_rate_limit`, …).
+**Class-based** — `class Plugin(BaseAgentHook)` for the full hook surface.
+Override only the methods you need — all defaults are transparent no-ops or
+pass-throughs.
+
+*Observe hooks* (read/mutate state; no return value unless noted):
+
+| Method | When called |
+|--------|-------------|
+| `on_start()` | Agent system starts up |
+| `on_end()` | Agent system shuts down |
+| `before_agent(ctx, state)` | Before the agent loop begins |
+| `after_agent(ctx, state, response)` | After the loop completes |
+| `before_model(ctx, state, request)` | Before each LLM call — return a modified `ModelRequest` or `None` |
+| `on_model_delta(ctx, state, chunk)` | Each streaming chunk from the LLM |
+| `after_model(ctx, state, response)` | After each full LLM response is assembled |
+| `on_rate_limit(ctx, state, retry_after, attempt, max_attempts)` | Provider returns 429 |
+
+*Intercept hooks* (must call and return the handler result):
+
+| Method | Wraps |
+|--------|-------|
+| `wrap_model_call(ctx, state, request, handler)` | Each LLM call — `await handler(request)` |
+| `wrap_tool_call(ctx, state, tool_call, handler)` | Each tool execution — `await handler(ctx, state, tool_call)` |
 
 Files prefixed with `_` are skipped. Roles are `lead` (team orchestrator),
 `member` (team worker), `agent` (direct callers).

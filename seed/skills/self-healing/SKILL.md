@@ -25,7 +25,7 @@ under `{OPENAGENTD_CONFIG_DIR}/`. No code changes, no restarts. Agent
 | Agent skills | same file, `skills:` list | "enable the web-research skill for yourself" |
 | Agent MCP tools | same file, `mcp:` list (bulk) or `tools:` list (selective) | "let yourself use the filesystem MCP", "remove the github MCP from yourself" — see "MCP tools on agents" below |
 | Summarization (per-agent) | same file, `summarization:` block | "summarise earlier — drop to 60k tokens", "use gemini-flash-lite for your summaries" |
-| Image / audio / video generation | `{OPENAGENTD_CONFIG_DIR}/multimodal.yaml` | "generate images with Gemini Imagen instead", "make images 1792x1024", "use high-quality image gen" |
+| Image / video generation | `{OPENAGENTD_CONFIG_DIR}/multimodal.yaml` | "generate images with Gemini instead", "switch to Veo for video", "make images higher quality", "use 1080p video" |
 | New skills | `{OPENAGENTD_CONFIG_DIR}/skills/{name}/SKILL.md` | "install a skill for reviewing pull requests" — **delegate to `skill-installer`** |
 
 Out of scope (refuse and explain): editing `.env` / secrets, changing provider
@@ -83,7 +83,7 @@ key var (matches `openagentd init`):
 
 | Provider | Env var |
 |----------|---------|
-| `googlegenai` | `GOOGLE_API_KEY` |
+| `googlegenai` | `GOOGLE_API_KEY` (agent model **and** image/video generation) |
 | `openai` | `OPENAI_API_KEY` |
 | `openrouter` | `OPENROUTER_API_KEY` |
 | `zai` | `ZAI_API_KEY` |
@@ -127,7 +127,7 @@ No team teardown, no in-flight turn disruption, no restart.
 | `mcp.json` (server added / removed / edited) | After `mcp-installer apply`, on the **next turn** of every agent that references the server. |
 | `SKILL.md` body edited | **Next turn** of any agent listing the skill (drift detection re-stamps the file). |
 | New skill installed via `skill-installer` | **Next turn** of any agent you add it to (the `skills:` list change is itself drift). |
-| `multimodal.yaml` | Read lazily on every `generate_image` call — instant. |
+| `multimodal.yaml` | Read lazily on every `generate_image` / `generate_video` call — instant. |
 
 The only changes that still require a process restart are: adding or
 removing **agent files** themselves (team shape change), `.env` /
@@ -159,12 +159,39 @@ Validation invariants to preserve:
 ## `multimodal.yaml` — schema
 
 ```yaml
+# ── IMAGE ────────────────────────────────────────────────────────────────────
+# Option A — OpenAI (DALL·E / GPT image family)
 image:
-  model: openai:gpt-image-2   # "<provider>:<model>" — only openai is registered
-  size: 1024x1024             # or 1792x1024, 1024x1792, auto
+  model: openai:gpt-image-2   # "<provider>:<model>"
+  size: 1024x1024             # 1024x1024 | 1536x1024 | 1024x1536 | auto
   quality: auto               # auto | standard | hd | high | medium | low
+  output_format: png          # png | jpeg | webp
+
+# Option B — Google GenAI (Gemini image family)
+# image:
+#   model: googlegenai:gemini-3.1-flash-image-preview
+#   aspect_ratio: "1:1"       # 1:1 | 3:4 | 4:3 | 9:16 | 16:9
+#   image_size: 1K            # 0.5K | 1K | 2K | 4K
+
+# Option C — OpenAI Codex (ChatGPT Plus/Pro subscription, OAuth)
+# image:
+#   model: codex:gpt-5.4
+#   size: 1024x1024
+#   quality: auto
+#   output_format: png
+
+# ── VIDEO ────────────────────────────────────────────────────────────────────
+# Google GenAI (Veo 3.1) — only registered video backend
+video:
+  model: googlegenai:veo-3.1-generate-preview
+  aspect_ratio: "16:9"        # 16:9 | 9:16
+  resolution: "720p"          # 720p | 1080p | 4k  (1080p/4k require duration "8")
+  duration_seconds: "8"       # "4" | "6" | "8"
+  # person_generation: "allow_adult"
+  # negative_prompt: "low quality, blurry"
+  # seed: "42"
+
 # audio:    # reserved — not implemented yet
-# video:    # reserved — not implemented yet
 ```
 
 Rules:
@@ -174,17 +201,30 @@ Rules:
   **rejected** by the loader.
 - Each provider backend owns its credentials — **never** add `api_key_env`
   to the YAML.
-  - `openai:*` reads `OPENAI_API_KEY` from the environment.
-- Only `openai` is registered. If the user asks for anything else
-  (`gemini:*`, `stability:*`, etc.), **refuse** and suggest
-  `openai:gpt-image-2` with `OPENAI_API_KEY` instead.
-- Before recommending `openai:*`, confirm the env var is set with
-  `shell`: `printenv OPENAI_API_KEY | head -c 4`.
-- Keep `extras` keys (`size`, `quality`) as plain strings.
-- The same `image.model` powers both text-to-image (`generate_image(prompt=...)`,
-  hits `/v1/images/generations`) and image editing
-  (`generate_image(prompt=..., images=[...])`, hits `/v1/images/edits` with
-  up to 16 workspace images). No separate config entry needed for edit mode.
+- **Registered image providers:**
+
+  | Provider | Auth env var | Notes |
+  |----------|--------------|-------|
+  | `openai` | `OPENAI_API_KEY` | extras: `size`, `quality`, `output_format` |
+  | `googlegenai` | `GOOGLE_API_KEY` | extras: `aspect_ratio`, `image_size` |
+  | `codex` | OAuth (`openagentd auth codex`) | rides Responses API; requires ChatGPT Plus/Pro |
+
+- **Registered video providers:**
+
+  | Provider | Auth env var | Notes |
+  |----------|--------------|-------|
+  | `googlegenai` | `GOOGLE_API_KEY` | Veo 3.1 family; extras: `aspect_ratio`, `resolution`, `duration_seconds`, `person_generation`, `negative_prompt`, `seed` |
+
+- If the user asks for an unregistered provider (`stability:*`, `replicate:*`, etc.),
+  **refuse** and suggest a registered alternative.
+- Before recommending any provider, confirm its env var (or OAuth token) is
+  present: `printenv <VAR> | head -c 4`. For `codex`, check the OAuth cache
+  file instead of an env var.
+- Keep `extras` keys as plain strings (they are passed through to the backend
+  as-is).
+- The same `image.model` powers both text-to-image (`generate_image(prompt=...)`)
+  and image editing (`generate_image(prompt=..., images=[...])`). No separate
+  config entry needed for edit mode.
 
 ## MCP tools on agents
 
@@ -265,11 +305,25 @@ Read the lead agent's file (e.g. `agents/openagentd.md`), show:
 
 Apply with `edit`. Tell user: "Applied. Active on my next turn."
 
-### 2. "Use Gemini Imagen for image generation"
+### 2. "Use Gemini for image generation"
 
-Refuse: "Only `openai` is registered for image generation today. I can
-switch you to a different OpenAI model (`gpt-image-2`, `dall-e-3`) or a
-different size/quality — want that instead?"
+Confirm `GOOGLE_API_KEY` is set, then read `multimodal.yaml` and show:
+
+```diff
+  image:
+-   model: openai:gpt-image-2
+-   size: 1024x1024
+-   quality: auto
+-   output_format: png
++   model: googlegenai:gemini-3.1-flash-image-preview
++   aspect_ratio: "1:1"
++   image_size: 1K
+```
+
+Apply. Note that `size`/`quality`/`output_format` are OpenAI-only extras and
+must be replaced with `aspect_ratio`/`image_size` (GoogleGenAI extras) — leaving
+stale keys is harmless (they are ignored by the backend) but confusing; remove
+them for clarity.
 
 ### 3. "Generate sharper images"
 
