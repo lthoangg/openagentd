@@ -464,7 +464,7 @@ Tasks can also be updated after creation via `PUT /api/scheduler/tasks/{id}` (RE
 
 `skill` is **always injected** into every agent — do not list it in `tools:`.
 
-`todo_write`, `todo_read`, and `schedule_task` are **always injected into the lead agent** — do not list them in `tools:`.
+`todo_manage`, `schedule_task`, and `note` are **always injected into the lead agent** — do not list them in `tools:`.
 
 ---
 
