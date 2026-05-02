@@ -201,7 +201,10 @@ async def test_text_to_video_success_writes_mp4_and_returns_markdown(
     _install_mock_transport(monkeypatch, _handler)
 
     result = await _generate_video(prompt="a lion", filename="lion")
-    assert result == "![a lion](lion.mp4)"
+    assert result.startswith("![a lion](lion.mp4)")
+    # URI note must be present so the LLM can use it for extension.
+    assert "extend_video=" in result
+    assert "https://cdn.google.test/videos/abc123.mp4" in result
     written = tmp_sandbox.workspace_root / "lion.mp4"
     assert written.exists()
     assert written.read_bytes() == fake_mp4
@@ -340,11 +343,10 @@ async def test_image_to_video_inlines_first_frame(
             assert instance["prompt"] == "animate"
             assert "lastFrame" not in instance
             assert "referenceImages" not in instance
-            # Veo's :predictLongRunning endpoint requires snake_case
-            # inline_data + mime_type (camelCase is rejected with 400).
-            inline = instance["image"]["inline_data"]
-            assert inline["mime_type"] == "image/png"
-            assert _b64.b64decode(inline["data"]) == first_png
+            # Veo's wire format: flat bytesBase64Encoded + mimeType (not inlineData).
+            img = instance["image"]
+            assert img["mimeType"] == "image/png"
+            assert _b64.b64decode(img["bytesBase64Encoded"]) == first_png
             return httpx.Response(200, json={"name": "operations/x"})
         if "operations/x" in url:
             return httpx.Response(
@@ -355,9 +357,9 @@ async def test_image_to_video_inlines_first_frame(
     _install_mock_transport(monkeypatch, _handler)
 
     result = await _generate_video(
-        prompt="animate", images=["first.png"], filename="out"
+        prompt="animate", first_frame="first.png", filename="out"
     )
-    assert result == "![animate](out.mp4)"
+    assert result.startswith("![animate](out.mp4)")
 
 
 @pytest.mark.asyncio
@@ -387,13 +389,12 @@ async def test_first_and_last_frame_interpolation(
 
             body = _json.loads(request.content)
             instance = body["instances"][0]
-            # Veo requires snake_case ``inline_data`` + ``mime_type`` even
-            # though the outer ``image`` / ``lastFrame`` keys are camelCase.
-            assert instance["image"]["inline_data"]["mime_type"] == "image/png"
-            assert _b64.b64decode(instance["image"]["inline_data"]["data"]) == first_png
-            assert instance["lastFrame"]["inline_data"]["mime_type"] == "image/jpeg"
+            # Veo's wire format: flat bytesBase64Encoded + mimeType (not inlineData).
+            assert instance["image"]["mimeType"] == "image/png"
+            assert _b64.b64decode(instance["image"]["bytesBase64Encoded"]) == first_png
+            assert instance["lastFrame"]["mimeType"] == "image/jpeg"
             assert (
-                _b64.b64decode(instance["lastFrame"]["inline_data"]["data"]) == last_jpg
+                _b64.b64decode(instance["lastFrame"]["bytesBase64Encoded"]) == last_jpg
             )
             return httpx.Response(200, json={"name": "operations/x"})
         if "operations/x" in url:
@@ -406,7 +407,7 @@ async def test_first_and_last_frame_interpolation(
 
     result = await _generate_video(
         prompt="morph",
-        images=["a.png"],
+        first_frame="a.png",
         last_frame="b.jpg",
     )
     assert result.startswith("![morph](")
@@ -443,7 +444,8 @@ async def test_reference_images_forwarded_with_asset_type(
             assert len(refs) == 2
             for ref, expected in zip(refs, [r1, r2], strict=False):
                 assert ref["referenceType"] == "asset"
-                assert _b64.b64decode(ref["image"]["inline_data"]["data"]) == expected
+                # Veo's wire format: flat bytesBase64Encoded + mimeType (not inlineData).
+                assert _b64.b64decode(ref["image"]["bytesBase64Encoded"]) == expected
             return httpx.Response(200, json={"name": "operations/x"})
         if "operations/x" in url:
             return httpx.Response(
@@ -674,7 +676,7 @@ async def test_invalid_duration_rejected_before_http(
 
 
 @pytest.mark.asyncio
-async def test_too_many_images_rejected_before_http(
+async def test_empty_first_frame_rejected_before_http(
     tmp_sandbox: SandboxConfig,
     config_dir: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -684,16 +686,12 @@ async def test_too_many_images_rejected_before_http(
         "video:\n  model: googlegenai:veo-3.1-generate-preview\n",
     )
     monkeypatch.setenv("GOOGLE_API_KEY", "k-test")
-    workspace = tmp_sandbox.workspace_root
-    workspace.mkdir(parents=True, exist_ok=True)
-    (workspace / "a.png").write_bytes(b"A")
-    (workspace / "b.png").write_bytes(b"B")
     handler, flagged = _trap_handler()
     _install_mock_transport(monkeypatch, handler)
 
-    result = await _generate_video(prompt="x", images=["a.png", "b.png"])
+    result = await _generate_video(prompt="x", first_frame="")
     assert result.startswith("Error:")
-    assert "exactly 1" in result
+    assert "image path must be a non-empty workspace string" in result
     assert flagged == []
 
 
@@ -768,7 +766,7 @@ async def test_reference_and_last_frame_mutually_exclusive(
 
     result = await _generate_video(
         prompt="x",
-        images=["a.png"],
+        first_frame="a.png",
         last_frame="b.png",
         reference_images=["r.png"],
     )
@@ -792,7 +790,7 @@ async def test_missing_sandbox_input_rejected_before_http(
     _install_mock_transport(monkeypatch, handler)
 
     # File not created → sandbox load returns "does not exist".
-    result = await _generate_video(prompt="x", images=["ghost.png"])
+    result = await _generate_video(prompt="x", first_frame="ghost.png")
     assert result.startswith("Error:")
     assert "does not exist" in result
     assert flagged == []
@@ -884,8 +882,11 @@ async def test_dispatcher_mocks_backend_and_validates_markdown_output(
     fake_mp4 = b"\x00\x00\x00\x18ftypisomFAKEMP4"
 
     # Mock the backend to return bytes directly.
-    async def _mock_backend(*args: object, **kwargs: object) -> bytes | str:
-        return fake_mp4
+    async def _mock_backend(*args: object, **kwargs: object) -> tuple[bytes, str] | str:
+        return (
+            fake_mp4,
+            "https://generativelanguage.googleapis.com/v1beta/files/test123",
+        )
 
     monkeypatch.setattr(
         "app.agent.tools.multimodalities.video._VIDEO_BACKENDS",
@@ -895,7 +896,7 @@ async def test_dispatcher_mocks_backend_and_validates_markdown_output(
     result = await _generate_video(prompt="test prompt", filename="my-video")
 
     # Assert markdown format.
-    assert result == "![test prompt](my-video.mp4)"
+    assert result.startswith("![test prompt](my-video.mp4)")
 
     # Assert file written to workspace.
     written = tmp_sandbox.workspace_root / "my-video.mp4"
@@ -918,8 +919,11 @@ async def test_dispatcher_generates_unique_filename_when_slug_empty(
 
     fake_mp4 = b"MP4"
 
-    async def _mock_backend(*args: object, **kwargs: object) -> bytes | str:
-        return fake_mp4
+    async def _mock_backend(*args: object, **kwargs: object) -> tuple[bytes, str] | str:
+        return (
+            fake_mp4,
+            "https://generativelanguage.googleapis.com/v1beta/files/test123",
+        )
 
     monkeypatch.setattr(
         "app.agent.tools.multimodalities.video._VIDEO_BACKENDS",
@@ -931,7 +935,7 @@ async def test_dispatcher_generates_unique_filename_when_slug_empty(
 
     # Result should be markdown with a UUID-based filename.
     assert result.startswith("![test](video-")
-    assert result.endswith(".mp4)")
+    assert ".mp4)" in result
 
     # Extract filename and verify it exists.
     filename = result.split("(")[1].split(")")[0]
@@ -954,8 +958,11 @@ async def test_dispatcher_sanitises_filename_special_chars(
 
     fake_mp4 = b"MP4"
 
-    async def _mock_backend(*args: object, **kwargs: object) -> bytes | str:
-        return fake_mp4
+    async def _mock_backend(*args: object, **kwargs: object) -> tuple[bytes, str] | str:
+        return (
+            fake_mp4,
+            "https://generativelanguage.googleapis.com/v1beta/files/test123",
+        )
 
     monkeypatch.setattr(
         "app.agent.tools.multimodalities.video._VIDEO_BACKENDS",
@@ -990,8 +997,11 @@ async def test_dispatcher_uses_sandbox_display_path_in_markdown(
 
     fake_mp4 = b"MP4"
 
-    async def _mock_backend(*args: object, **kwargs: object) -> bytes | str:
-        return fake_mp4
+    async def _mock_backend(*args: object, **kwargs: object) -> tuple[bytes, str] | str:
+        return (
+            fake_mp4,
+            "https://generativelanguage.googleapis.com/v1beta/files/test123",
+        )
 
     monkeypatch.setattr(
         "app.agent.tools.multimodalities.video._VIDEO_BACKENDS",
@@ -1001,7 +1011,7 @@ async def test_dispatcher_uses_sandbox_display_path_in_markdown(
     result = await _generate_video(prompt="test", filename="video")
 
     # Markdown should contain just the filename, not an absolute path.
-    assert result == "![test](video.mp4)"
+    assert result.startswith("![test](video.mp4)")
     # Should not contain workspace root path.
     assert str(tmp_sandbox.workspace_root) not in result
 
@@ -1051,7 +1061,7 @@ async def test_symlink_to_denied_root_rejected_by_sandbox(
     handler, flagged = _trap_handler()
     _install_mock_transport(monkeypatch, handler)
 
-    result = await _generate_video(prompt="x", images=["link.png"])
+    result = await _generate_video(prompt="x", first_frame="link.png")
 
     # Should be rejected before HTTP.
     assert result.startswith("Error:")
@@ -1083,7 +1093,7 @@ async def test_directory_input_rejected_as_not_file(
     handler, flagged = _trap_handler()
     _install_mock_transport(monkeypatch, handler)
 
-    result = await _generate_video(prompt="x", images=["subdir"])
+    result = await _generate_video(prompt="x", first_frame="subdir")
 
     assert result.startswith("Error:")
     assert "not a regular file" in result
@@ -1113,7 +1123,7 @@ async def test_oversized_input_image_rejected(
     handler, flagged = _trap_handler()
     _install_mock_transport(monkeypatch, handler)
 
-    result = await _generate_video(prompt="x", images=["huge.png"])
+    result = await _generate_video(prompt="x", first_frame="huge.png")
 
     assert result.startswith("Error:")
     assert "bytes" in result and "max" in result
@@ -1121,12 +1131,12 @@ async def test_oversized_input_image_rejected(
 
 
 @pytest.mark.asyncio
-async def test_empty_images_list_rejected(
+async def test_empty_first_frame_string_rejected(
     tmp_sandbox: SandboxConfig,
     config_dir: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Mode invariant: empty images list is rejected."""
+    """Mode invariant: empty first_frame string is rejected."""
     _write_config(
         config_dir,
         "video:\n  model: googlegenai:veo-3.1-generate-preview\n",
@@ -1136,10 +1146,10 @@ async def test_empty_images_list_rejected(
     handler, flagged = _trap_handler()
     _install_mock_transport(monkeypatch, handler)
 
-    result = await _generate_video(prompt="x", images=[])
+    result = await _generate_video(prompt="x", first_frame="")
 
     assert result.startswith("Error:")
-    assert "non-empty list" in result
+    assert "image path must be a non-empty workspace string" in result
     assert flagged == []
 
 
@@ -1421,8 +1431,11 @@ async def test_otel_span_attributes_set_on_success(
 
     fake_mp4 = b"MP4DATA"
 
-    async def _mock_backend(*args: object, **kwargs: object) -> bytes | str:
-        return fake_mp4
+    async def _mock_backend(*args: object, **kwargs: object) -> tuple[bytes, str] | str:
+        return (
+            fake_mp4,
+            "https://generativelanguage.googleapis.com/v1beta/files/test123",
+        )
 
     monkeypatch.setattr(
         "app.agent.tools.multimodalities.video._VIDEO_BACKENDS",
@@ -1487,8 +1500,11 @@ async def test_otel_span_mode_attribute_for_each_mode(
 
     fake_mp4 = b"MP4"
 
-    async def _mock_backend(*args: object, **kwargs: object) -> bytes | str:
-        return fake_mp4
+    async def _mock_backend(*args: object, **kwargs: object) -> tuple[bytes, str] | str:
+        return (
+            fake_mp4,
+            "https://generativelanguage.googleapis.com/v1beta/files/test123",
+        )
 
     monkeypatch.setattr(
         "app.agent.tools.multimodalities.video._VIDEO_BACKENDS",
@@ -1528,12 +1544,12 @@ async def test_otel_span_mode_attribute_for_each_mode(
     assert "text" in captured_modes
 
     captured_modes.clear()
-    await _generate_video(prompt="image mode", images=["a.png"])
+    await _generate_video(prompt="image mode", first_frame="a.png")
     assert "image" in captured_modes
 
     captured_modes.clear()
     await _generate_video(
-        prompt="interpolation mode", images=["a.png"], last_frame="b.png"
+        prompt="interpolation mode", first_frame="a.png", last_frame="b.png"
     )
     assert "interpolation" in captured_modes
 

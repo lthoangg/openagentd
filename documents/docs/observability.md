@@ -189,8 +189,11 @@ Child of `execute_tool generate_video`, emitted by `_generate_video` in `app/age
 | Attribute | Value |
 |-----------|-------|
 | `gen_ai.operation.name` | `"generate_video"` |
-| `video.mode` | `"text"` \| `"image"` \| `"interpolation"` \| `"reference"` |
-| `video.input_count` | number of input images resolved from the sandbox (0 for text mode) |
+| `video.mode` | `"text"` \| `"image"` \| `"interpolation"` \| `"reference"` \| `"extension"` |
+| `video.has_first_frame` | `bool` — whether a first-frame image was supplied |
+| `video.has_last_frame` | `bool` — whether a last-frame image was supplied |
+| `video.has_extend_video` | `bool` — whether a Files API URI was supplied for extension |
+| `video.reference_image_count` | number of reference images (0 for non-reference modes) |
 | `video.{aspect_ratio,resolution,duration_seconds}` | resolved override when provided |
 | `video.output_bytes` | size of the written mp4 (success only) |
 

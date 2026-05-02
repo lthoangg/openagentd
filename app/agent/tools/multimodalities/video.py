@@ -1,14 +1,17 @@
 """generate_video tool — create a video in the session workspace.
 
-One tool, four input modes routed by which optional args are set:
+One tool, five input modes routed by which optional args are set:
 
 - **text-to-video** (default): pure ``prompt`` → mp4.
-- **image-to-video**: ``images=[first_frame]`` → animated starting from that
-  frame. Exactly one image is accepted for this mode.
-- **first+last interpolation**: ``images=[first_frame]`` + ``last_frame`` →
-  smooth transition between the two frames.
+- **image-to-video**: ``first_frame=<path>`` → animated starting from that
+  frame.
+- **first+last interpolation**: ``first_frame=<path>`` + ``last_frame=<path>``
+  → smooth transition between the two frames.
 - **reference images**: ``reference_images=[...]`` (up to 3) → subject /
   style preservation. Mutually exclusive with ``last_frame`` per Veo.
+- **video extension**: ``extend_video=<uri>`` → extend a previously-generated
+  Veo mp4 (pass the Files API URI returned by a prior generation) by 8 s.
+  Mutually exclusive with all other input modes. Forced to 16:9 / 720p / 8 s.
 
 Per-call ``aspect_ratio``, ``resolution``, and ``duration_seconds`` override
 the YAML defaults. Other extras (``person_generation``, ``negative_prompt``,
@@ -63,10 +66,11 @@ _SAFE_NAME_RE = re.compile(r"[^a-zA-Z0-9_-]+")
 # Input-image cap: 5 MB for first/last frame + reference images. Matches image.py.
 _MAX_INPUT_BYTES = 5 * 1024 * 1024
 
-# Veo caps: 3 reference images; exactly one first-frame image for image-to-video
-# / interpolation. Enforced here so bad values don't reach the HTTP call.
+# Files API base — video extension URIs must start with this prefix.
+_FILES_API_BASE = "https://generativelanguage.googleapis.com/"
+
+# Veo cap: 3 reference images max. Enforced here so bad values don't reach the HTTP call.
 _MAX_REFERENCE_IMAGES = 3
-_MAX_FIRST_FRAME_IMAGES = 1
 
 # Enums exposed to the LLM via the tool schema. Keep these aligned with the
 # Veo 3.1 docs — foreign values are rejected at the dispatcher before HTTP.
@@ -77,7 +81,7 @@ VideoDuration = Literal["4", "6", "8"]
 
 _GenerateFn = Callable[
     ...,
-    Awaitable[bytes | str],
+    Awaitable[tuple[bytes, str] | str],
 ]
 
 
@@ -153,14 +157,14 @@ async def _generate_video(
         str | None,
         Field(description="Optional slug for the saved file (no extension)."),
     ] = None,
-    images: Annotated[
-        list[str] | None,
+    first_frame: Annotated[
+        str | None,
         Field(
             description=(
-                "Optional workspace-relative path of the starting frame "
-                "(exactly 1 entry). Switches the tool from text-to-video "
-                "to image-to-video. Combine with `last_frame` for "
-                "first-to-last-frame interpolation."
+                "Optional workspace-relative path of the starting frame. "
+                "Switches the tool from text-to-video to image-to-video. "
+                "Combine with `last_frame` for first-to-last-frame "
+                "interpolation."
             ),
         ),
     ] = None,
@@ -169,9 +173,9 @@ async def _generate_video(
         Field(
             description=(
                 "Optional workspace-relative path of the ending frame. "
-                "Requires `images` to be set (first frame). The video "
-                "interpolates from `images[0]` to `last_frame`. Mutually "
-                "exclusive with `reference_images`."
+                "Requires `first_frame` to be set. The video interpolates "
+                "from `first_frame` to `last_frame`. Mutually exclusive "
+                "with `reference_images`."
             ),
         ),
     ] = None,
@@ -188,7 +192,10 @@ async def _generate_video(
     aspect_ratio: Annotated[
         VideoAspectRatio | None,
         Field(
-            description="Output aspect ratio: '16:9' (landscape) or '9:16' (portrait)."
+            description=(
+                "Output aspect ratio: '16:9' (landscape) or '9:16' (portrait). "
+                "Must be '16:9' when using `extend_video`."
+            )
         ),
     ] = None,
     resolution: Annotated[
@@ -209,6 +216,18 @@ async def _generate_video(
             ),
         ),
     ] = None,
+    extend_video: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Files API URI of a previously Veo-generated video to extend "
+                "(e.g. 'https://generativelanguage.googleapis.com/v1beta/files/…'). "
+                "Appends 8 s of new content guided by `prompt`. "
+                "Mutually exclusive with `first_frame`, `last_frame`, and "
+                "`reference_images`. Output is always 16:9 / 720p / 8 s."
+            ),
+        ),
+    ] = None,
 ) -> str:
     """Generate a video clip. Returns markdown ``![alt](file.mp4)`` — include it verbatim to render inline. On failure returns ``Error: ...``."""
     tracer = get_tracer()
@@ -216,12 +235,13 @@ async def _generate_video(
     with tracer.start_as_current_span("generate_video") as span:
         span.set_attribute("gen_ai.operation.name", "generate_video")
         span.set_attribute("video.prompt_length", len(prompt))
-        span.set_attribute("video.input_image_count", len(images) if images else 0)
+        span.set_attribute("video.has_first_frame", first_frame is not None)
         span.set_attribute(
             "video.reference_image_count",
             len(reference_images) if reference_images else 0,
         )
         span.set_attribute("video.has_last_frame", last_frame is not None)
+        span.set_attribute("video.has_extend_video", extend_video is not None)
 
         def _fail(
             error_type: str,
@@ -307,29 +327,10 @@ async def _generate_video(
 
         # Input-mode validation. Enforce the same invariants the backend
         # restates as a safety net, but surface cleaner error messages here.
-        if images is not None:
-            if not isinstance(images, list) or not images:
-                return _fail(
-                    "validation",
-                    "`images` must be a non-empty list (or omitted).",
-                    provider=cfg.provider,
-                    model=cfg.model,
-                )
-            if len(images) > _MAX_FIRST_FRAME_IMAGES:
-                return _fail(
-                    "validation",
-                    (
-                        f"`images` must contain exactly 1 path (first frame); "
-                        f"got {len(images)}. For subject references, use "
-                        f"`reference_images` instead."
-                    ),
-                    provider=cfg.provider,
-                    model=cfg.model,
-                )
-        if last_frame is not None and not images:
+        if last_frame is not None and first_frame is None:
             return _fail(
                 "validation",
-                "`last_frame` requires `images` (first frame) to also be set.",
+                "`last_frame` requires `first_frame` to also be set.",
                 provider=cfg.provider,
                 model=cfg.model,
             )
@@ -352,22 +353,64 @@ async def _generate_video(
                     provider=cfg.provider,
                     model=cfg.model,
                 )
-        if reference_images and last_frame is not None:
+        if reference_images is not None and last_frame is not None:
             return _fail(
                 "validation",
                 "`reference_images` and `last_frame` are mutually exclusive on Veo.",
                 provider=cfg.provider,
                 model=cfg.model,
             )
+        if extend_video is not None:
+            if any((first_frame, last_frame, reference_images)):
+                return _fail(
+                    "validation",
+                    "`extend_video` is mutually exclusive with `first_frame`, "
+                    "`last_frame`, and `reference_images`.",
+                    provider=cfg.provider,
+                    model=cfg.model,
+                )
+            if not extend_video.startswith(_FILES_API_BASE):
+                return _fail(
+                    "validation",
+                    "`extend_video` must be a Files API URI starting with "
+                    f"'{_FILES_API_BASE}' (got '{extend_video[:80]}').",
+                    provider=cfg.provider,
+                    model=cfg.model,
+                )
+            # Veo only supports 16:9 / 720p for extension; reject conflicting values.
+            if aspect_ratio and aspect_ratio != "16:9":
+                return _fail(
+                    "validation",
+                    f"video extension only supports 16:9 aspect ratio (got '{aspect_ratio}').",
+                    provider=cfg.provider,
+                    model=cfg.model,
+                )
+            if resolution and resolution != "720p":
+                return _fail(
+                    "validation",
+                    f"video extension only supports 720p resolution (got '{resolution}').",
+                    provider=cfg.provider,
+                    model=cfg.model,
+                )
+            # durationSeconds must be "8" for extension.
+            if duration_seconds and duration_seconds != "8":
+                return _fail(
+                    "validation",
+                    f"video extension requires duration_seconds='8' (got '{duration_seconds}').",
+                    provider=cfg.provider,
+                    model=cfg.model,
+                )
 
         # Resolve mode label for span / metrics. "text" / "image" /
-        # "interpolation" / "reference" are short, stable strings dashboards
-        # can group by.
-        if reference_images:
+        # "interpolation" / "reference" / "extension" are short, stable strings
+        # dashboards can group by.
+        if extend_video is not None:
+            mode = "extension"
+        elif reference_images:
             mode = "reference"
         elif last_frame is not None:
             mode = "interpolation"
-        elif images:
+        elif first_frame is not None:
             mode = "image"
         else:
             mode = "text"
@@ -388,9 +431,10 @@ async def _generate_video(
         first_frame_loaded: tuple[str, bytes] | None = None
         last_frame_loaded: tuple[str, bytes] | None = None
         reference_loaded: list[tuple[str, bytes]] | None = None
+        # extend_video is a Files API URI — no sandbox loading needed.
 
-        if images:
-            loaded = _load_input_image(images[0])
+        if first_frame is not None:
+            loaded = _load_input_image(first_frame)
             if isinstance(loaded, str):
                 msg = loaded.removeprefix("Error: ")
                 return _fail(
@@ -422,6 +466,7 @@ async def _generate_video(
             image=first_frame_loaded,
             last_frame=last_frame_loaded,
             reference_images=reference_loaded,
+            extend_video=extend_video,
             overrides=overrides or None,
         )
 
@@ -431,27 +476,29 @@ async def _generate_video(
                 "backend", msg, provider=cfg.provider, model=cfg.model, mode=mode
             )
 
+        mp4_bytes, video_uri = result
+
         # Me: Veo always emits mp4; no per-call format override exists today.
-        ext = "mp4"
-        name = _sanitise_filename(filename, ext=ext)
+        name = _sanitise_filename(filename, ext="mp4")
         sandbox = get_sandbox()
         resolved = sandbox.validate_path(name)
         resolved.parent.mkdir(parents=True, exist_ok=True)
-        resolved.write_bytes(result)
+        resolved.write_bytes(mp4_bytes)
         rel = sandbox.display_path(resolved)
         logger.info(
             "generate_video_saved path={} bytes={} provider={} model={} mode={} "
-            "refs={} has_last_frame={}",
+            "refs={} has_last_frame={} extend_uri={}",
             resolved,
-            len(result),
+            len(mp4_bytes),
             cfg.provider,
             cfg.model,
             mode,
             len(reference_loaded) if reference_loaded else 0,
-            last_frame_loaded is not None,
+            last_frame is not None,
+            extend_video is not None,
         )
 
-        output_bytes = len(result)
+        output_bytes = len(mp4_bytes)
         span.set_attribute("video.output_bytes", output_bytes)
         span.set_status(Status(StatusCode.OK))
         elapsed = time.monotonic() - t0
@@ -471,7 +518,12 @@ async def _generate_video(
             },
         )
 
-        return f"![{prompt}]({rel})"
+        # Always append the Files API URI so the LLM can pass it back as
+        # ``extend_video`` on a future call. URIs expire after 2 days.
+        return (
+            f"![{prompt}]({rel})\n\n"
+            f'To extend this video, pass `extend_video="{video_uri}"`.'
+        )
 
 
 def _record_duration(
@@ -508,8 +560,8 @@ generate_video = Tool(
     description=(
         "Generate a video clip in the session workspace using Veo. "
         "Supports text-to-video, image-to-video (first frame), first+last "
-        "frame interpolation, and up to 3 reference images. Returns "
-        "markdown ``![alt](file.mp4)`` to include verbatim so it renders "
-        "inline. On failure returns ``Error: ...``."
+        "frame interpolation, up to 3 reference images, and video extension "
+        "(extend an existing mp4). Returns markdown ``![alt](file.mp4)`` to "
+        "include verbatim so it renders inline. On failure returns ``Error: ...``."
     ),
 )

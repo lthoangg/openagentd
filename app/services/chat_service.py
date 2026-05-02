@@ -1,4 +1,5 @@
 import asyncio
+import json
 import shutil
 from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
@@ -660,6 +661,40 @@ def _deserialize_messages(db_messages: Sequence[SessionMessage]) -> list[ChatMes
                 m.id,
                 m.role,
             )
+
+    # Strip tool calls whose arguments are not valid JSON — this happens when
+    # the user interrupts the agent mid-stream before the LLM has finished
+    # emitting the arguments. The partial JSON is persisted to the DB and would
+    # cause a JSONDecodeError on the next turn when tool_executor tries to parse
+    # it. Drop the bad tool calls from the assistant message and remove any
+    # orphaned ToolMessage results that reference them.
+    bad_tool_call_ids: set[str] = set()
+    for msg in result:
+        if not isinstance(msg, AssistantMessage) or not msg.tool_calls:
+            continue
+        clean: list = []
+        for tc in msg.tool_calls:
+            try:
+                json.loads(tc.function.arguments)
+                clean.append(tc)
+            except (json.JSONDecodeError, ValueError):
+                bad_tool_call_ids.add(tc.id)
+                logger.warning(
+                    "deserialize_drop_partial_tool_call tool={} id={} args_prefix={!r}",
+                    tc.function.name,
+                    tc.id,
+                    tc.function.arguments[:80],
+                )
+        if len(clean) != len(msg.tool_calls):
+            msg.tool_calls = clean or None
+
+    if bad_tool_call_ids:
+        result = [
+            m
+            for m in result
+            if not (isinstance(m, ToolMessage) and m.tool_call_id in bad_tool_call_ids)
+        ]
+
     return result
 
 

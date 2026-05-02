@@ -117,7 +117,7 @@ Verbs are **deterministic** (no randomised phrase pools). Only argument values s
 | `bg` | Action-based — e.g. `Listing background processes…`, `Checking process `*[pid]*`…`, `Reading output of process `*[pid]*`…`, `Stopping process `*[pid]*`…`, `Managing background process…` | hidden | — |
 | `team_message` | Messaging *[recipients]* (joined by `, `, truncated at 60 chars) | message `content` only (no JSON wrapper) | `arguments` |
 | `generate_image` | Painting *[filename]* (normalised: any trailing extension stripped, `.png` appended to match the backend `_sanitise_filename`), or `Painting an image…` when filename is absent | `prompt` string only (`images: …` line prepended in edit mode) | `arguments` |
-| `generate_video` | Filming *[filename]* (`.mp4` appended; random `video-<hex>` when absent), or `Filming a video…` when filename is absent | `first_frame` / `last_frame` / `references` input lines (when set) prepended to the `prompt` | `arguments` |
+| `generate_video` | **Extension mode:** `Extending [filename]` / `Extending a video…`. **Other modes:** `Filming [filename]` / `Filming a video…`. Header switches on `extend_video` being set. | `extend_video` / `first_frame` / `last_frame` / `references` input lines (when set) prepended to the `prompt` | `arguments` |
 
 > Both `generate_image` and `generate_video` set `suppressResult: true` — their markdown return values (`![prompt](file.png)` / `![prompt](file.mp4)`) are already rendered inline in the assistant reply, so the tool-call accordion does not repeat them. The `.mp4` path is rendered as `<video controls>` by `MarkdownVideo` (see [`docs/agent/tools.md#multimodalities-multimodalities`](../agent/tools.md#multimodalities-multimodalities)).
 
