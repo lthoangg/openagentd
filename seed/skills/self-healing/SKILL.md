@@ -73,7 +73,11 @@ in its frontmatter. Don't hard-code filenames; agent files are user-renamable.
 
 When `generate_image` or `generate_video` returns a "not configured" error
 (i.e. the `image:` / `video:` section is missing from `multimodal.yaml`),
-or when the user explicitly asks to set up image / video generation:
+or when the user explicitly asks to set up image / video generation.
+
+**Handle this inline — do not delegate to a member agent.** The member has no
+access to this skill and will fall back to its own reasoning, producing
+inconsistent behaviour.
 
 1. **Ask which provider they want** if not already specified. Default suggestion:
    `openai:gpt-image-2` for images, `googlegenai:veo-3.1-generate-preview` for
