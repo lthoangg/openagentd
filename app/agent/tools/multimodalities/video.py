@@ -245,10 +245,12 @@ async def _generate_video(
 
         cfg = get_section("video")
         if cfg is None:
+            from app.agent.tools.multimodalities._config import _config_path
+
             return _fail(
                 "configuration",
-                "video generation is not configured. "
-                "Add a `video` section to .openagentd/config/multimodal.yaml.",
+                f"video generation is not configured. "
+                f"Add a `video` section to {_config_path()}.",
             )
 
         span.set_attribute("gen_ai.provider.name", cfg.provider)

@@ -233,10 +233,12 @@ async def _generate_image(
 
         cfg = get_section("image")
         if cfg is None:
+            from app.agent.tools.multimodalities._config import _config_path
+
             return _fail(
                 "configuration",
-                "image generation is not configured. "
-                "Add an `image` section to .openagentd/config/multimodal.yaml.",
+                f"image generation is not configured. "
+                f"Add an `image` section to {_config_path()}.",
             )
 
         span.set_attribute("gen_ai.provider.name", cfg.provider)
