@@ -14,7 +14,6 @@ tools:
   - glob
   - grep
   - ls
-  - note
   - read
   - rm
   - schedule_task

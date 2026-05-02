@@ -391,13 +391,16 @@ def _build_agent(
 
     # These tools are always available to the lead agent — not listed in frontmatter.
     if cfg.role == "lead":
+        from app.agent.tools.builtin.note import note_tool as _note_tool
+
         _todo_manage = tool_registry.get("todo_manage", todo_manage)
         _schedule_task = tool_registry.get("schedule_task", _schedule_task_tool)
-        tools += [_todo_manage, _schedule_task]
+        _note = tool_registry.get("note", _note_tool)
+        tools += [_todo_manage, _schedule_task, _note]
 
     seen: set[str] = {t.name for t in tools}
     for tool_name in cfg.tools:
-        if tool_name in ("skill", "todo_manage", "schedule_task"):
+        if tool_name in ("skill", "todo_manage", "schedule_task", "note"):
             continue
         if tool_name not in tool_registry:
             raise ValueError(
