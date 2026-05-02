@@ -36,7 +36,7 @@ def session_id():
 @pytest.fixture
 def caplog_loguru(caplog):
     """Capture loguru logs in caplog for assertion.
-    
+
     Loguru doesn't use the standard logging module by default, so we need to
     add a handler that writes to caplog's handler.
     """
@@ -184,7 +184,9 @@ def test_assistant_message_with_empty_tool_calls_untouched(session_id):
 def test_non_assistant_messages_untouched(session_id):
     """Non-assistant messages are not processed for tool call validation."""
     db_messages = [
-        make_session_message(role="system", content="You are helpful", session_id=session_id),
+        make_session_message(
+            role="system", content="You are helpful", session_id=session_id
+        ),
         make_session_message(role="user", content="Hello", session_id=session_id),
         make_session_message(
             role="tool",
@@ -498,7 +500,9 @@ def test_partial_tool_call_no_corresponding_tool_message(session_id, caplog_logu
     assert "deserialize_drop_partial_tool_call" in caplog_loguru.text
 
 
-def test_multiple_assistant_messages_independent_sanitisation(session_id, caplog_loguru):
+def test_multiple_assistant_messages_independent_sanitisation(
+    session_id, caplog_loguru
+):
     """Each AssistantMessage is sanitised independently."""
     db_messages = [
         make_session_message(
@@ -661,17 +665,19 @@ def test_malformed_json_with_special_characters(session_id, caplog_loguru):
 
 def test_complex_valid_json_kept(session_id):
     """Complex but valid JSON is kept."""
-    complex_args = json.dumps({
-        "query": "python",
-        "filters": {
-            "language": "en",
-            "date_range": ["2020-01-01", "2025-12-31"],
-        },
-        "options": {
-            "limit": 100,
-            "offset": 0,
-        },
-    })
+    complex_args = json.dumps(
+        {
+            "query": "python",
+            "filters": {
+                "language": "en",
+                "date_range": ["2020-01-01", "2025-12-31"],
+            },
+            "options": {
+                "limit": 100,
+                "offset": 0,
+            },
+        }
+    )
     db_messages = [
         make_session_message(
             role="assistant",
@@ -729,7 +735,9 @@ def test_warning_includes_args_prefix(session_id, caplog_loguru):
 def test_all_message_types_in_sequence(session_id):
     """Full sequence of different message types is handled correctly."""
     db_messages = [
-        make_session_message(role="system", content="You are helpful", session_id=session_id),
+        make_session_message(
+            role="system", content="You are helpful", session_id=session_id
+        ),
         make_session_message(role="user", content="Hello", session_id=session_id),
         make_session_message(
             role="assistant",

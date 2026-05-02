@@ -690,11 +690,9 @@ def _deserialize_messages(db_messages: Sequence[SessionMessage]) -> list[ChatMes
 
     if bad_tool_call_ids:
         result = [
-            m for m in result
-            if not (
-                isinstance(m, ToolMessage)
-                and m.tool_call_id in bad_tool_call_ids
-            )
+            m
+            for m in result
+            if not (isinstance(m, ToolMessage) and m.tool_call_id in bad_tool_call_ids)
         ]
 
     return result

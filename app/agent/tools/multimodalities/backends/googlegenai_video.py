@@ -380,7 +380,9 @@ async def generate(
     if extend_video is not None and any((image, last_frame, reference_images)):
         return "Error: extend_video is mutually exclusive with image, last_frame, and reference_images."
 
-    instance = _build_instance(prompt, image, last_frame, reference_images, extend_video)
+    instance = _build_instance(
+        prompt, image, last_frame, reference_images, extend_video
+    )
     parameters = _build_parameters(cfg, overrides)
 
     payload: dict[str, Any] = {"instances": [instance]}

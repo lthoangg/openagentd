@@ -522,7 +522,7 @@ async def _generate_video(
         # ``extend_video`` on a future call. URIs expire after 2 days.
         return (
             f"![{prompt}]({rel})\n\n"
-            f"To extend this video, pass `extend_video=\"{video_uri}\"`."
+            f'To extend this video, pass `extend_video="{video_uri}"`.'
         )
 
 

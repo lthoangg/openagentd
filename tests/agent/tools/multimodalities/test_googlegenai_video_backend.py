@@ -883,7 +883,10 @@ async def test_dispatcher_mocks_backend_and_validates_markdown_output(
 
     # Mock the backend to return bytes directly.
     async def _mock_backend(*args: object, **kwargs: object) -> tuple[bytes, str] | str:
-        return fake_mp4, "https://generativelanguage.googleapis.com/v1beta/files/test123"
+        return (
+            fake_mp4,
+            "https://generativelanguage.googleapis.com/v1beta/files/test123",
+        )
 
     monkeypatch.setattr(
         "app.agent.tools.multimodalities.video._VIDEO_BACKENDS",
@@ -917,7 +920,10 @@ async def test_dispatcher_generates_unique_filename_when_slug_empty(
     fake_mp4 = b"MP4"
 
     async def _mock_backend(*args: object, **kwargs: object) -> tuple[bytes, str] | str:
-        return fake_mp4, "https://generativelanguage.googleapis.com/v1beta/files/test123"
+        return (
+            fake_mp4,
+            "https://generativelanguage.googleapis.com/v1beta/files/test123",
+        )
 
     monkeypatch.setattr(
         "app.agent.tools.multimodalities.video._VIDEO_BACKENDS",
@@ -953,7 +959,10 @@ async def test_dispatcher_sanitises_filename_special_chars(
     fake_mp4 = b"MP4"
 
     async def _mock_backend(*args: object, **kwargs: object) -> tuple[bytes, str] | str:
-        return fake_mp4, "https://generativelanguage.googleapis.com/v1beta/files/test123"
+        return (
+            fake_mp4,
+            "https://generativelanguage.googleapis.com/v1beta/files/test123",
+        )
 
     monkeypatch.setattr(
         "app.agent.tools.multimodalities.video._VIDEO_BACKENDS",
@@ -989,7 +998,10 @@ async def test_dispatcher_uses_sandbox_display_path_in_markdown(
     fake_mp4 = b"MP4"
 
     async def _mock_backend(*args: object, **kwargs: object) -> tuple[bytes, str] | str:
-        return fake_mp4, "https://generativelanguage.googleapis.com/v1beta/files/test123"
+        return (
+            fake_mp4,
+            "https://generativelanguage.googleapis.com/v1beta/files/test123",
+        )
 
     monkeypatch.setattr(
         "app.agent.tools.multimodalities.video._VIDEO_BACKENDS",
@@ -1420,7 +1432,10 @@ async def test_otel_span_attributes_set_on_success(
     fake_mp4 = b"MP4DATA"
 
     async def _mock_backend(*args: object, **kwargs: object) -> tuple[bytes, str] | str:
-        return fake_mp4, "https://generativelanguage.googleapis.com/v1beta/files/test123"
+        return (
+            fake_mp4,
+            "https://generativelanguage.googleapis.com/v1beta/files/test123",
+        )
 
     monkeypatch.setattr(
         "app.agent.tools.multimodalities.video._VIDEO_BACKENDS",
@@ -1486,7 +1501,10 @@ async def test_otel_span_mode_attribute_for_each_mode(
     fake_mp4 = b"MP4"
 
     async def _mock_backend(*args: object, **kwargs: object) -> tuple[bytes, str] | str:
-        return fake_mp4, "https://generativelanguage.googleapis.com/v1beta/files/test123"
+        return (
+            fake_mp4,
+            "https://generativelanguage.googleapis.com/v1beta/files/test123",
+        )
 
     monkeypatch.setattr(
         "app.agent.tools.multimodalities.video._VIDEO_BACKENDS",
