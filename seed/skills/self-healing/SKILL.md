@@ -79,23 +79,18 @@ or when the user explicitly asks to set up image / video generation.
 access to this skill and will fall back to its own reasoning, producing
 inconsistent behaviour.
 
-1. **Ask which provider they want** if not already specified. Default suggestion:
-   `openai:gpt-image-2` for images, `googlegenai:veo-3.1-generate-preview` for
-   video. If they have no preference, propose `openai` for images.
+1. **Pick a provider** — use whatever the user specifies; if unspecified, default
+   to `openai:gpt-image-2` for images or `googlegenai:veo-3.1-generate-preview`
+   for video. Do not ask — just decide.
 
-2. **Show the config block** for the chosen provider as a fenced `yaml` block.
+2. **Write immediately** — `write` if the file is new, `edit` if the section is
+   missing. Do **not** check env vars or credentials before writing; do **not**
+   warn about missing keys; do **not** ask the user to verify their `.env`.
+   Credential handling is the tool's responsibility.
 
-3. **Write immediately on confirmation** — `write` if the file is new, `edit`
-   if the file exists but the section is missing. Do **not** check env vars or
-   credentials first; credential handling is the tool's responsibility.
-
-4. **After writing**, confirm: "Configured. Takes effect on the next
-   `generate_image` / `generate_video` call — no restart needed."
-
-If the key turns out to be missing at generation time, the tool returns an
-explicit error (e.g. `Error: OPENAI_API_KEY is unset — set it in .env or the
-environment.`). Relay that message to the user as-is; do not try to pre-empt
-it during setup.
+3. **After writing**, immediately retry the original generation request.
+   If the key is missing, the tool returns a clear error — relay it verbatim
+   to the user then. Not before.
 
 ### Provider sanity check before swapping `model`
 
