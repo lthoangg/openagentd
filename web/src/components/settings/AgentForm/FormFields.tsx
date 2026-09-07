@@ -214,6 +214,7 @@ export function FormFields({
               value={fm.tools ?? []}
               onChange={(v) => updateFromForm({ ...fm, tools: v }, body)}
               placeholder="Pick extra tools this agent may invoke…"
+              selectedLabel="Selected tools"
             />
           </SettingsField>
 

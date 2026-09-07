@@ -232,6 +232,15 @@ describe('AgentForm — Capabilities card', () => {
     expect(screen.getByText(/2 extra selected/i)).toBeTruthy()
   })
 
+  it('groups selected extra tools in a labelled selection list', () => {
+    renderForm(SAMPLE_RAW)
+
+    const selected = screen.getByLabelText('Selected tools')
+    expect(within(selected).getByText('shell')).toBeTruthy()
+    expect(within(selected).getByText('read')).toBeTruthy()
+    expect(within(selected).getByRole('button', { name: 'Remove shell' })).toBeTruthy()
+  })
+
   it('does not offer implicit lead-only or skill tools in the extra picker', async () => {
     const user = userEvent.setup()
     renderForm(SAMPLE_RAW)
