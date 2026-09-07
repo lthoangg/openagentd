@@ -11,8 +11,8 @@ const CODING_WORKSPACE_SMOOTHING_MS = 5000
 export function useSessionsQuery() {
   return useInfiniteQuery({
     queryKey: queryKeys.session.sessions.workspace('__all_coding__'),
-    queryFn: ({ pageParam }: { pageParam: string | null }) =>
-      listSessions(pageParam, PAGE_SIZE),
+    queryFn: ({ pageParam, signal }) =>
+      listSessions(pageParam, PAGE_SIZE, undefined, signal),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage: SessionPageResponse) =>
       lastPage.has_more ? lastPage.next_cursor : undefined,
@@ -22,8 +22,8 @@ export function useSessionsQuery() {
 export function useCodingWorkspaceSessionsQuery(workspace: string, enabled = true) {
   return useInfiniteQuery({
     queryKey: queryKeys.session.sessions.workspace(workspace),
-    queryFn: ({ pageParam }: { pageParam: string | null }) =>
-      listSessions(pageParam, CODING_WORKSPACE_PAGE_SIZE, { workspace }),
+    queryFn: ({ pageParam, signal }) =>
+      listSessions(pageParam, CODING_WORKSPACE_PAGE_SIZE, { workspace }, signal),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage: SessionPageResponse) =>
       lastPage.has_more ? lastPage.next_cursor : undefined,

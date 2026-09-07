@@ -25,7 +25,7 @@ function Input({ className, ref, ...props }: InputProps) {
         // Typography
         'px-2.5 py-1.5 text-xs text-(--color-text)',
         // Placeholder
-        'placeholder:text-(--color-text-muted)/60',
+        'placeholder:text-(--color-text-muted)',
         // Interaction
         'outline-none transition-colors',
         'focus:border-(--focus-ring) focus:ring-2 focus:ring-(--focus-ring)/30',

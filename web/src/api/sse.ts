@@ -38,16 +38,21 @@ export function readSSE(response: Response, callbacks: SSECallbacks): void {
 
   const dispatchEvent = () => {
     if (!currentData) return
+    let parsed: unknown
     try {
-      const parsed = JSON.parse(currentData)
-      // Use SSE event name; fall back to a `type` field inside data JSON
-      const type = currentEvent || (parsed.type as string) || 'unknown'
-      callbacks.onEvent(type, parsed)
+      parsed = JSON.parse(currentData)
     } catch {
       callbacks.onParseError?.(new Error(`SSE parse error: ${currentData}`))
+      currentEvent = ''
+      currentData = ''
+      return
     }
+    const embeddedType = parsed && typeof parsed === 'object' && 'type' in parsed && typeof parsed.type === 'string'
+      ? parsed.type : 'unknown'
+    const type = currentEvent || embeddedType
     currentEvent = ''
     currentData = ''
+    callbacks.onEvent(type, parsed)
   }
 
   const processLine = (line: string) => {
@@ -93,6 +98,8 @@ export function readSSE(response: Response, callbacks: SSECallbacks): void {
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return
       callbacks.onError?.(err instanceof Error ? err : new Error(String(err)))
+    } finally {
+      reader.releaseLock()
     }
   }
 

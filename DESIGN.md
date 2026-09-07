@@ -86,6 +86,7 @@ colors:
 
   # ── Utility ────────────────────────────────────────────────────────────────
   focus-ring: "#5AA8E2"
+  focus-outline: "#174A73"     # Solid keyboard-focus contrast on paper
   overlay: "rgba(26, 23, 20, 0.40)"
 
 typography:
@@ -501,8 +502,10 @@ Only genuinely floating layers (modals, popovers, dropdowns, toasts) use
 rgba(0,0,0,.05)` in light, roughly 6× stronger in dark where tonal steps read
 weakly.
 
-Focus is always a 2px `focus-ring` at 30–40% alpha, plus a border shift to full
-`focus-ring` on inputs. It is never removed — only replaced.
+Keyboard focus uses a solid 2px outline (`#174A73` in light mode, `#9DD0F5`
+in dark mode), with a 2px offset. Translucent `focus-ring` effects remain
+decorative supplements, not the only focus indicator. Input borders also shift
+to `focus-ring`. Focus is never removed without an equally visible replacement.
 
 ### Motion
 

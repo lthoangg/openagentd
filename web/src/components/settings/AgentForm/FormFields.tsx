@@ -47,7 +47,6 @@ export function FormFields({
   body,
   disabled,
   toolOptions,
-  mcpOptions,
   modelOptions,
   effectiveTools,
   updateFromForm,
@@ -56,7 +55,6 @@ export function FormFields({
   body: string
   disabled?: boolean
   toolOptions: MultiSelectOption[]
-  mcpOptions: MultiSelectOption[]
   modelOptions: (ModelOption & { thinking_levels?: string[] })[]
   effectiveTools?: string[]
   updateFromForm: (next: AgentFrontmatter, nextBody: string) => void
@@ -195,8 +193,8 @@ export function FormFields({
       <SectionCard>
         <SectionCardHeader>
           {hasBuiltInProfile
-            ? 'Capabilities \u2014 extra tools, MCP servers, and skills on top of the built-in profile'
-            : 'Capabilities \u2014 tools, MCP servers, and skills'}
+            ? 'Capabilities \u2014 extra tools and skills on top of the built-in profile'
+            : 'Capabilities \u2014 tools and skills'}
         </SectionCardHeader>
         <SectionCardRows>
         <div className="px-3 py-3 flex flex-col gap-4">
@@ -216,23 +214,7 @@ export function FormFields({
               value={fm.tools ?? []}
               onChange={(v) => updateFromForm({ ...fm, tools: v }, body)}
               placeholder="Pick extra tools this agent may invoke…"
-            />
-          </SettingsField>
-
-          <SettingsField
-            label="MCP servers"
-            hint={
-              mcpOptions.length === 0
-                ? 'No MCP servers configured. Add one under Settings → MCP.'
-                : `${(fm.mcp ?? []).length} selected of ${mcpOptions.length} available. Each grants every tool the server exposes.`
-            }
-          >
-            <MultiSelect
-              options={mcpOptions}
-              value={fm.mcp ?? []}
-              onChange={(v) => updateFromForm({ ...fm, mcp: v }, body)}
-              placeholder="Pick MCP servers this agent may use…"
-              emptyLabel="No matching servers"
+              selectedLabel="Selected tools"
             />
           </SettingsField>
 

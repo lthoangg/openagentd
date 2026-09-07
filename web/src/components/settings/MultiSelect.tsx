@@ -30,6 +30,8 @@ interface Props {
   onChange: (next: string[]) => void
   placeholder?: string
   emptyLabel?: string
+  /** Accessible label for the selected-value list inside the trigger. */
+  selectedLabel?: string
   /** Optional id forwarded to the search input (for label association). */
   searchId?: string
 }
@@ -40,6 +42,7 @@ export function MultiSelect({
   onChange,
   placeholder = 'Select…',
   emptyLabel = 'No matches',
+  selectedLabel = 'Selected options',
   searchId,
 }: Props) {
   const [open, setOpen] = useState(false)
@@ -128,29 +131,33 @@ export function MultiSelect({
             {value.length === 0 && (
               <span className="px-1.5 text-(--color-text-muted)">{placeholder}</span>
             )}
-            {value.map((v) => (
-              <span
-                key={v}
-                className="flex items-center gap-1 rounded-sm bg-(--bg-key) px-1.5 py-0.5 font-mono text-xs text-(--color-text)"
-              >
-                {v}
-                <button
-                  type="button"
-                  // Stop the surrounding-trigger click from re-toggling the
-                  // popover when the user removes a chip.
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    remove(v)
-                  }}
-                  aria-label={`Remove ${v}`}
-                  className="flex h-7 w-7 items-center justify-center text-(--color-text-muted) transition-colors hover:text-(--color-text) md:h-auto md:w-auto"
-                >
-                  <X size={11} />
-                </button>
+            {value.length > 0 && (
+              <span aria-label={selectedLabel} className="flex flex-wrap items-center gap-1">
+                {value.map((v) => (
+                  <span
+                    key={v}
+                    className="flex items-center gap-1 rounded-xs border border-(--color-border-strong) bg-(--bg-card) py-0.5 pr-0.5 pl-1.5 font-mono text-[11px] text-(--color-text) shadow-[0_1px_0_rgb(26_23_20/0.06)]"
+                  >
+                    {v}
+                    <button
+                      type="button"
+                      // Stop the surrounding-trigger click from re-toggling the
+                      // popover when the user removes a chip.
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        remove(v)
+                      }}
+                      aria-label={`Remove ${v}`}
+                      className="flex h-7 w-7 items-center justify-center rounded-xs text-(--color-text-muted) transition-colors hover:bg-(--bg-key) hover:text-(--color-text) md:h-4 md:w-4"
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
               </span>
-            ))}
+            )}
             <ChevronDown
               size={14}
               className="ml-auto shrink-0 self-center text-(--color-text-muted)"

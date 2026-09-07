@@ -126,6 +126,8 @@ class TerminalSession:
         self._closed = False
         self._eof = False
         self._reader_paused = False
+        self._write_lock = asyncio.Lock()
+        self._write_ready: asyncio.Future[None] | None = None
         self.last_activity = time.monotonic()
         loop = asyncio.get_running_loop()
         self._read_queue: asyncio.Queue[bytes | None] = asyncio.Queue(
@@ -184,13 +186,35 @@ class TerminalSession:
 
     async def write(self, data: bytes) -> None:
         """Write keystrokes to the PTY."""
-        if self._closed or self._eof:
-            return
-        self.last_activity = time.monotonic()
-        try:
-            os.write(self._master_fd, data)
-        except OSError:
-            pass
+        async with self._write_lock:
+            remaining = memoryview(data)
+            loop = asyncio.get_running_loop()
+            while remaining and not self._closed and not self._eof:
+                self.last_activity = time.monotonic()
+                try:
+                    written = os.write(self._master_fd, remaining)
+                except BlockingIOError:
+                    ready = loop.create_future()
+                    self._write_ready = ready
+
+                    def writable() -> None:
+                        if not ready.done():
+                            ready.set_result(None)
+
+                    loop.add_writer(self._master_fd, writable)
+                    try:
+                        await ready
+                    finally:
+                        loop.remove_writer(self._master_fd)
+                        self._write_ready = None
+                    continue
+                except OSError:
+                    if self._closed or self._eof:
+                        return
+                    raise
+                if written <= 0:
+                    raise OSError("Terminal write made no progress")
+                remaining = remaining[written:]
 
     def resize(self, rows: int, cols: int) -> None:
         """Propagate a client resize to the PTY (TIOCSWINSZ + SIGWINCH)."""
@@ -215,6 +239,10 @@ class TerminalSession:
         # process has exited even if the reap hasn't been collected yet.
         if self._eof:
             return False
+        return self._process_alive()
+
+    def _process_alive(self) -> bool:
+        """Poll the child independently of the client-facing closed state."""
         if self._proc is not None:
             # Popen.poll() does a WNOHANG waitpid and caches the result —
             # the single source of truth for this child's status, so every
@@ -234,6 +262,8 @@ class TerminalSession:
             return
         self._closed = True
         _SESSIONS.pop(self.session_id, None)
+        if self._write_ready is not None and not self._write_ready.done():
+            self._write_ready.set_result(None)
 
         try:
             asyncio.get_running_loop().remove_reader(self._master_fd)
@@ -248,7 +278,7 @@ class TerminalSession:
         # Grace period, then SIGKILL. `alive` polls (non-blocking) so this
         # never stalls the event loop.
         for _ in range(10):
-            if not self.alive:
+            if not self._process_alive():
                 break
             await asyncio.sleep(0.05)
         else:
@@ -274,7 +304,10 @@ class TerminalSession:
         except OSError:
             pass
         # Unblock any pending read().
-        self._read_queue.put_nowait(None)
+        # A full queue has no blocked reader; it drains before read() observes
+        # _closed. Preserve buffered output instead of dropping it for EOF.
+        if not self._read_queue.full():
+            self._read_queue.put_nowait(None)
         logger.info(
             "terminal_session_closed session_id={} pid={}", self.session_id, self.pid
         )

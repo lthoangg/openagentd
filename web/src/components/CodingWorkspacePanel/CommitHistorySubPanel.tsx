@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { LongPressButton } from '@/components/ui/long-press-button'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { GitCommit } from '@/api/types'
 import {
@@ -24,6 +25,7 @@ export interface CommitHistorySubPanelProps {
     isFetchingNextPage: boolean
     hasNextPage?: boolean
     fetchNextPage: () => Promise<unknown>
+    refetch?: () => Promise<unknown>
     data?: {
       pages: Array<{
         is_git_repo?: boolean
@@ -96,17 +98,18 @@ export function CommitHistorySubPanel({
 
     const el = sentinelRef.current
     observer.observe(el)
-    return () => {
-      observer.unobserve(el)
-    }
-  }, [subTab])
+    return () => observer.disconnect()
+  }, [subTab, gitHistory.isLoading, gitHistory.hasNextPage, commits.length])
 
   if (subTab === 'commits') {
     if (gitHistory.isLoading) {
       return <p className="px-2 py-4 text-xs text-(--color-text-subtle)">Loading commits…</p>
     }
     if (gitHistory.isError) {
-      return <p className="px-2 py-4 text-xs text-(--color-error)">Failed to load commits</p>
+      return <div className="space-y-2 px-2 py-4" role="alert">
+        <p className="text-xs text-(--color-error)">Failed to load commits. Your repository is unchanged.</p>
+        {gitHistory.refetch && <Button size="sm" onClick={() => void gitHistory.refetch?.()}>Retry commits</Button>}
+      </div>
     }
     if (gitHistory.data?.pages[0]?.is_git_repo === false) {
       return <p className="px-2 py-4 text-xs text-(--color-text-subtle)">Not a git repository</p>
@@ -237,6 +240,13 @@ export function CommitHistorySubPanel({
           <p className="text-center py-2 text-[10px] text-(--color-text-subtle)">Loading more commits…</p>
         )}
         <div ref={sentinelRef} className="h-1" />
+        {gitHistory.hasNextPage && (
+          <Button size="sm" className="w-full min-h-11 md:min-h-8"
+            disabled={gitHistory.isFetchingNextPage}
+            onClick={() => void gitHistory.fetchNextPage()}>
+            Load more commits
+          </Button>
+        )}
       </div>
     )
   }

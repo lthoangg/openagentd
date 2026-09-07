@@ -19,7 +19,6 @@
 import {
   createContext,
   useContext,
-  useEffect,
   useId,
   useRef,
   useState,
@@ -31,6 +30,7 @@ import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useDeferredUnmount } from '@/components/ui/_use-deferred-unmount'
+import { useModalFocus } from '@/hooks/useModalFocus'
 
 // ─── Context ────────────────────────────────────────────────────────────────
 
@@ -121,24 +121,7 @@ function DialogContent({ className, children, showCloseButton = true, ...props }
   const { mounted, closing } = useDeferredUnmount(open, 100)
   const contentRef = useRef<HTMLDivElement>(null)
 
-  // Close on Escape
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [open, setOpen])
-
-  // Trap focus inside when open
-  useEffect(() => {
-    if (!open) return
-    const prev = document.activeElement as HTMLElement | null
-    const focusable = contentRef.current?.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-    )
-    focusable?.[0]?.focus()
-    return () => { prev?.focus() }
-  }, [open])
+  useModalFocus(open && mounted, () => setOpen(false))
 
   if (!mounted) return null
 
@@ -148,6 +131,7 @@ function DialogContent({ className, children, showCloseButton = true, ...props }
       <div
         ref={contentRef}
         data-slot="dialog-content"
+        data-modal-focus={open ? 'true' : undefined}
         // See DialogOverlay — same edge-swipe exclusion applies to the
         // content itself (e.g. tapping/dragging a footer button).
         data-swipe-ignore

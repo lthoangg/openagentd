@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 from unittest.mock import AsyncMock, patch
 
+import pytest
 
 from app.agent.artifacts import TOOL_RESULTS_DIR, tool_results_dir
 from app.agent.hooks.tool_result_offload import ToolResultOffloadHook, _NEVER_OFFLOAD
@@ -13,6 +15,13 @@ from app.agent.denied_paths import (
 )
 from app.agent.schemas.chat import FunctionCall, ToolCall
 from app.agent.state import AgentState, RunContext
+
+
+@pytest.fixture(autouse=True)
+def isolate_offloads(tmp_path, monkeypatch):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "OPENAGENTD_DATA_DIR", str(tmp_path / "data"))
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +142,7 @@ class TestLargeResult:
 
             assert "File:" in result
             assert "myagent" in result
-            assert "tc_path.txt" in result
+            assert hashlib.sha256(b"tc_path").hexdigest() + ".txt" in result
         finally:
             from app.agent.denied_paths import _denied_paths_ctx as _sandbox_ctx
 
@@ -218,7 +227,9 @@ class TestLargeResult:
 
             await hook.wrap_tool_call(ctx, state, tc, handler)
 
-            dest = tool_results_dir("agent1", "s") / "tc_file.txt"
+            dest = tool_results_dir("agent1", "s") / (
+                hashlib.sha256(b"tc_file").hexdigest() + ".txt"
+            )
             assert dest.exists()
             assert dest.read_text() == full_content
         finally:
@@ -374,7 +385,7 @@ class TestWriteOffload:
 
             assert path.exists()
             assert path.read_text() == "file content here"
-            assert path.name == "tc_123.txt"
+            assert path.name == hashlib.sha256(b"tc_123").hexdigest() + ".txt"
             assert path.parent.name == "myagent"
             assert path.parent.parent.name == TOOL_RESULTS_DIR
         finally:
@@ -383,13 +394,14 @@ class TestWriteOffload:
             _sandbox_ctx.reset(token)
 
     def test_path_outside_workspace(self, tmp_path):
-        sandbox = SandboxConfig(workspace=str(tmp_path))
+        workspace = tmp_path / "project"
+        sandbox = SandboxConfig(workspace=str(workspace))
         token = set_sandbox(sandbox)
         try:
             hook = ToolResultOffloadHook()
             path = hook._write_offload("agent_x", "tc_abc", "content", "s")
 
-            assert not str(path).startswith(str(tmp_path))
+            assert not path.is_relative_to(workspace)
         finally:
             from app.agent.denied_paths import _denied_paths_ctx as _sandbox_ctx
 

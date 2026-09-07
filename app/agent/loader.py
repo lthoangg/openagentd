@@ -281,7 +281,6 @@ def _build_agent(
 
     seen: set[str] = {t.name for t in tools}
     cfg.tools = list(dict.fromkeys(cfg.tools))
-    cfg.mcp = list(dict.fromkeys(cfg.mcp))
     unknown_tools: list[str] = []
     for tool_name in cfg.tools:
         if tool_name in _CONTEXT_INJECTED_TOOLS:
@@ -299,6 +298,12 @@ def _build_agent(
 
     from app.agent.mcp import mcp_manager
 
+    # MCP is configured once at the application level. Agent Markdown used to
+    # opt into servers with `mcp:` frontmatter, which made a newly configured
+    # server invisible until the user edited a second, unrelated setting.
+    # Keep parsing that legacy field for backwards-compatible files, but do
+    # not use it to gate the globally configured servers.
+    cfg.mcp = list(dict.fromkeys(mcp_manager.server_names()))
     for server_name in cfg.mcp:
         server_tools = mcp_manager.get_tools_for_server(server_name)
         if server_tools:

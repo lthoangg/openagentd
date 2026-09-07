@@ -25,6 +25,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
+import { useUnsavedSettings } from '@/hooks/useUnsavedSettings'
+
 interface EditorSubHeaderProps {
   /** What the user sees: agent / skill / server name, or "New agent". */
   name: string
@@ -68,6 +70,7 @@ export function EditorSubHeader({
   onSave,
   onBack,
 }: EditorSubHeaderProps) {
+  useUnsavedSettings(dirty || saving)
   const KindIcon = kind === 'agent' ? Wrench : kind === 'skill' ? Sparkles : Plug
   const showToggle = mode != null && onModeChange != null
 

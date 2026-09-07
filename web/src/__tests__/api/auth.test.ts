@@ -633,14 +633,24 @@ describe("withTokenParam", () => {
     expect(got).toBe("/api/files/x?_token=a%20b%2Bc%2Fd%3De")
   })
 
-  it("does not double-add when called twice (caller's responsibility, but we don't re-parse)", async () => {
+  it("does not double-add when called twice", async () => {
     window.__OAD_TOKEN__ = "abc"
     const auth = await freshAuth()
     const once = auth.withTokenParam("/api/files/x")
     const twice = auth.withTokenParam(once)
-    // ``withTokenParam`` is deliberately dumb — it doesn't dedupe.
-    // This test documents that. If we ever add dedupe, flip it.
-    expect(twice).toBe("/api/files/x?_token=abc&_token=abc")
+    expect(twice).toBe("/api/files/x?_token=abc")
+  })
+
+  it("never adds credentials to an unrelated origin", async () => {
+    window.__OAD_TOKEN__ = "abc"
+    const auth = await freshAuth()
+    expect(auth.withTokenParam("https://example.com/api/file")).toBe("https://example.com/api/file")
+  })
+
+  it("places the credential before a fragment", async () => {
+    window.__OAD_TOKEN__ = "abc"
+    const auth = await freshAuth()
+    expect(auth.withTokenParam("/api/files/x#page=2")).toBe("/api/files/x?_token=abc#page=2")
   })
 })
 

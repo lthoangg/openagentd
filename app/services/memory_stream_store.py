@@ -48,6 +48,13 @@ _MAX_TURN_LIFETIME_SECONDS = 4 * 60 * 60  # 4 hours
 _SENTINEL = object()
 
 
+def _terminate_subscriber(queue: asyncio.Queue) -> None:
+    """Always leave a terminal marker, including for a paused/full client."""
+    if queue.full():
+        queue.get_nowait()
+    queue.put_nowait(_SENTINEL)
+
+
 class _TurnState:
     """Accumulated state for one in-flight turn."""
 
@@ -198,10 +205,7 @@ async def init_turn(session_id: str, *, keep_subscribers: bool = False) -> None:
                 return
             # Me drain old subscribers so they unblock
             for q in old.subscribers:
-                try:
-                    q.put_nowait(_SENTINEL)
-                except asyncio.QueueFull:
-                    pass
+                _terminate_subscriber(q)
 
         state = _TurnState()
         _turns[session_id] = state
@@ -464,10 +468,7 @@ async def mark_done(session_id: str) -> None:
         _refresh_cleanup(session_id, state)
         # Me send sentinel to all subscribers so they exit
         for q in list(state.subscribers):
-            try:
-                q.put_nowait(_SENTINEL)
-            except asyncio.QueueFull:
-                pass
+            _terminate_subscriber(q)
     except Exception as exc:
         logger.warning(
             "memory_store_mark_done_failed session_id={} error={}",
@@ -701,4 +702,6 @@ async def close() -> None:
     """Clear all state (called on server shutdown)."""
     for state in _turns.values():
         _cancel_cleanup(state)
+        for queue in state.subscribers:
+            _terminate_subscriber(queue)
     _turns.clear()

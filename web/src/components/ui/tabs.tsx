@@ -2,6 +2,7 @@ import { createContext, useContext, useId, useMemo, useState, type ComponentProp
 import { cn } from '@/lib/utils'
 
 interface TabsContextValue {
+  id: string
   value: string | undefined
   setValue: (value: string) => void
   orientation: 'horizontal' | 'vertical'
@@ -29,16 +30,18 @@ interface TabsProps extends Omit<ComponentPropsWithRef<'div'>, 'defaultValue' | 
 }
 
 function Tabs({ className, value, defaultValue, onValueChange, orientation = 'horizontal', children, ...props }: TabsProps) {
+  const id = useId()
   const [internalValue, setInternalValue] = useState(defaultValue)
   const currentValue = value ?? internalValue
   const contextValue = useMemo<TabsContextValue>(() => ({
+    id,
     value: currentValue,
     setValue: (next) => {
       if (value === undefined) setInternalValue(next)
       onValueChange?.(next)
     },
     orientation,
-  }), [currentValue, onValueChange, orientation, value])
+  }), [id, currentValue, onValueChange, orientation, value])
 
   return (
     <TabsContext.Provider value={contextValue}>
@@ -86,11 +89,10 @@ interface TabsTriggerProps extends ComponentPropsWithRef<'button'> {
   value: string
 }
 
-function TabsTrigger({ className, value, id, type = 'button', onClick, ...props }: TabsTriggerProps) {
-  const generatedId = useId()
-  const { value: activeValue, setValue } = useTabsContext()
+function TabsTrigger({ className, value, id, type = 'button', onClick, onKeyDown, ...props }: TabsTriggerProps) {
+  const { id: groupId, value: activeValue, setValue, orientation } = useTabsContext()
   const active = activeValue === value
-  const triggerId = id ?? `${generatedId}-tab`
+  const triggerId = id ?? `${groupId}-${encodeURIComponent(value)}-tab`
 
   return (
     <button
@@ -100,6 +102,7 @@ function TabsTrigger({ className, value, id, type = 'button', onClick, ...props 
       data-slot="tabs-trigger"
       data-active={active ? '' : undefined}
       aria-selected={active}
+      aria-controls={`${groupId}-${encodeURIComponent(value)}-panel`}
       tabIndex={active ? 0 : -1}
       className={cn(
         'relative inline-flex h-full flex-1 items-center justify-center gap-1.5 rounded-xs border border-transparent px-3 py-1 text-sm font-medium whitespace-nowrap text-(--color-text-muted) transition-colors',
@@ -109,8 +112,24 @@ function TabsTrigger({ className, value, id, type = 'button', onClick, ...props 
         className,
       )}
       onClick={(event) => {
-        setValue(value)
         onClick?.(event)
+        if (!event.defaultPrevented) setValue(value)
+      }}
+      onKeyDown={(event) => {
+        onKeyDown?.(event)
+        if (event.defaultPrevented) return
+        const previous = orientation === 'horizontal' ? 'ArrowLeft' : 'ArrowUp'
+        const next = orientation === 'horizontal' ? 'ArrowRight' : 'ArrowDown'
+        if (![previous, next, 'Home', 'End'].includes(event.key)) return
+        const list = event.currentTarget.closest('[role="tablist"]')
+        const tabs = Array.from(list?.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)') ?? [])
+        if (!tabs.length) return
+        const index = tabs.indexOf(event.currentTarget)
+        const target = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+          : (index + (event.key === next ? 1 : -1) + tabs.length) % tabs.length
+        event.preventDefault()
+        tabs[target].focus()
+        tabs[target].click()
       }}
       {...props}
     />
@@ -123,10 +142,12 @@ interface TabsContentProps extends ComponentPropsWithRef<'div'> {
 }
 
 function TabsContent({ className, value, hidden, ...props }: TabsContentProps) {
-  const { value: activeValue } = useTabsContext()
+  const { id, value: activeValue } = useTabsContext()
   const isHidden = value ? activeValue !== value : hidden
   return (
     <div
+      id={value ? `${id}-${encodeURIComponent(value)}-panel` : undefined}
+      aria-labelledby={value ? `${id}-${encodeURIComponent(value)}-tab` : undefined}
       role={value ? 'tabpanel' : undefined}
       data-slot="tabs-content"
       hidden={isHidden}

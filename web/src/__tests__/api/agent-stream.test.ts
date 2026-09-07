@@ -22,7 +22,7 @@ afterEach(() => {
 })
 
 describe('agentStream', () => {
-  it('includes desktop authentication in its raw SSE URL', async () => {
+  it('authenticates SSE with a header, never a URL credential', async () => {
     const fetchSpy = mock(() => Promise.resolve(new Response(null, { status: 200 })))
     globalThis.fetch = fetchSpy as typeof fetch
     const { agentStream } = await import('@/api/client/agent')
@@ -31,8 +31,8 @@ describe('agentStream', () => {
     await Promise.resolve()
 
     expect(fetchSpy).toHaveBeenCalledWith(
-      'http://127.0.0.1:4082/api/agent/session-1/stream?_token=secondary-window-token',
-      expect.any(Object),
+      'http://127.0.0.1:4082/api/agent/session-1/stream',
+      expect.objectContaining({ headers: { Authorization: 'Bearer secondary-window-token' } }),
     )
   })
 })

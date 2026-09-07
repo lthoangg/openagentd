@@ -6,8 +6,8 @@
  * stuck.
  *
  * The rebase rule: a draft follows the server snapshot until the user edits
- * it. We detect a new snapshot by *identity*, not by value, so refetching
- * equal data never clobbers in-progress edits.
+ * it. Equal snapshots never clobber edits, and changed snapshots update the
+ * reset baseline without replacing dirty local values.
  *
  * Usage:
  *   const draft = useSettingsDraft({
@@ -98,10 +98,13 @@ export function useSettingsDraft<T>({
   // without memoizing the input.
   const dataKey = data === undefined ? undefined : JSON.stringify(data)
   if (data !== undefined && dataKey !== state.sourceKey) {
+    const base = state.source === undefined ? initial : hydrate ? hydrate(state.source) : state.source
+    const canonical = (value: T) => JSON.stringify(normalize ? normalize(value) : value)
+    const edited = state.source !== undefined && canonical(state.value) !== canonical(base)
     setState({
       source: data,
       sourceKey: dataKey,
-      value: hydrate ? hydrate(data) : data,
+      value: edited || isSaving ? state.value : hydrate ? hydrate(data) : data,
     })
   }
 
@@ -145,11 +148,13 @@ export function useSettingsDraft<T>({
       const saved = await onSave(canon(state.value))
       // Adopt the server's echo as the new baseline so the page reflects any
       // server-side coercion (clamped numbers, dropped empty keys).
-      setState({
+      setState((current) => ({
         source: saved,
-        sourceKey: JSON.stringify(saved),
-        value: hydrate ? hydrate(saved) : saved,
-      })
+        // Track the query snapshot separately from the save echo. A stale
+        // query must not rebase the just-saved draft back to its old value.
+        sourceKey: current.sourceKey,
+        value: current.value === state.value ? hydrate ? hydrate(saved) : saved : current.value,
+      }))
       push({ tone: 'success', title: successTitle })
     } catch (err) {
       push({

@@ -16,6 +16,7 @@ from typing import cast
 import yaml
 
 from app.core.config import settings
+from app.core.secret_files import write_secret_file
 from app.core.runtime_settings import ServerSettings, runtime_settings_path
 
 
@@ -38,7 +39,7 @@ def _pop_legacy_server_settings(
     if legacy_server is not None:
         if validate:
             legacy_server = ServerSettings.model_validate(legacy_server)
-        path.write_text(yaml.safe_dump(shared, sort_keys=False), encoding="utf-8")
+        write_secret_file(path, yaml.safe_dump(shared, sort_keys=False))
     return legacy_server
 
 
@@ -77,7 +78,7 @@ def save_server_settings(cfg: ServerSettings, path: Path | None = None) -> Path:
     resolved = path or server_settings_path()
     resolved.parent.mkdir(parents=True, exist_ok=True)
     data = cfg.model_dump(mode="json", exclude_none=True)
-    resolved.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    write_secret_file(resolved, yaml.safe_dump(data, sort_keys=False))
     if os.name != "nt":
         resolved.chmod(0o600)
     return resolved

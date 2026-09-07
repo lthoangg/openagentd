@@ -8,7 +8,15 @@
 //! * the legacy `servers: ["url", …]` shape written by early desktop builds
 //!   is migrated on read.
 
+use std::io::Write;
 use std::path::Path;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Mutex,
+};
+
+static CONFIG_MUTATION: Mutex<()> = Mutex::new(());
+static WRITE_ID: AtomicU64 = AtomicU64::new(0);
 
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -54,8 +62,17 @@ pub fn normalize_base_url(base_url: &str) -> Result<String> {
         return Err(anyhow!("base URL is required"));
     }
     let parsed = url::Url::parse(trimmed).context("parse base URL")?;
+    if !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+    {
+        return Err(anyhow!(
+            "backend URL must not contain credentials, a query, or a fragment"
+        ));
+    }
     match parsed.scheme() {
-        "http" | "https" => Ok(trimmed.to_string()),
+        "http" | "https" => Ok(parsed.as_str().trim_end_matches('/').to_string()),
         scheme => Err(anyhow!("unsupported URL scheme: {scheme}")),
     }
 }
@@ -111,7 +128,39 @@ pub fn load_backend_config_from(path: &Path) -> Result<AppBackendConfig> {
 
 fn write_backend_config(path: &Path, config: &AppBackendConfig) -> Result<()> {
     let bytes = serde_json::to_vec_pretty(config).context("serialize backend config")?;
-    std::fs::write(path, bytes).with_context(|| format!("write {}", path.display()))
+    let parent = path
+        .parent()
+        .context("backend config must have a parent directory")?;
+    std::fs::create_dir_all(parent)?;
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
+    let temporary = parent.join(format!(
+        ".backend-{}-{nonce}-{}.tmp",
+        std::process::id(),
+        WRITE_ID.fetch_add(1, Ordering::Relaxed)
+    ));
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(&temporary)
+        .context("create temporary backend config")?;
+    let result = (|| {
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+        drop(file);
+        std::fs::rename(&temporary, path)
+    })();
+    if result.is_err() {
+        // Preserve the original error; cleanup cannot repair a failed save.
+        let _ = std::fs::remove_file(&temporary);
+    }
+    result.with_context(|| format!("write {}", path.display()))
 }
 
 /// Mutate `config` in place: upsert `base_url`/`name` into the known-servers
@@ -154,7 +203,10 @@ pub fn save_backend_config_to(
     name: Option<&str>,
     activate: bool,
 ) -> Result<()> {
-    let mut config = load_backend_config_from(path).unwrap_or_default();
+    let _guard = CONFIG_MUTATION
+        .lock()
+        .map_err(|_| anyhow!("backend config lock poisoned"))?;
+    let mut config = load_backend_config_from(path)?;
     apply_backend_config_update(&mut config, base_url, name, activate);
     write_backend_config(path, &config)
 }
@@ -163,7 +215,10 @@ pub fn save_backend_config_to(
 /// the caller has already normalised), clear `active_base_url` if it pointed
 /// there, and refill the default entry if the list ends up empty.
 pub fn remove_backend_server_at(path: &Path, base_url: &str) -> Result<()> {
-    let mut config = load_backend_config_from(path).unwrap_or_default();
+    let _guard = CONFIG_MUTATION
+        .lock()
+        .map_err(|_| anyhow!("backend config lock poisoned"))?;
+    let mut config = load_backend_config_from(path)?;
     config.servers.retain(|server| {
         normalize_base_url(&server.base_url).map_or(true, |saved| saved != base_url)
     });
@@ -347,6 +402,30 @@ mod tests {
         let (_dir, path) = config_file();
         std::fs::write(&path, b"{not json").unwrap();
         assert!(load_backend_config_from(&path).is_err());
+    }
+
+    #[test]
+    fn mutations_preserve_corrupt_configuration_for_recovery() {
+        let (_dir, path) = config_file();
+        std::fs::write(&path, b"{not json").unwrap();
+        assert!(save_backend_config_to(&path, Some("https://example.com"), None, false).is_err());
+        assert!(remove_backend_server_at(&path, "https://example.com").is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"{not json");
+    }
+
+    #[test]
+    fn backend_urls_are_canonical_and_do_not_persist_credentials() {
+        assert_eq!(
+            normalize_base_url("https://EXAMPLE.com:443/api").unwrap(),
+            "https://example.com"
+        );
+        for url in [
+            "https://user:password@example.com",
+            "https://example.com?token=secret",
+            "https://example.com#fragment",
+        ] {
+            assert!(normalize_base_url(url).is_err(), "{url}");
+        }
     }
 
     #[test]

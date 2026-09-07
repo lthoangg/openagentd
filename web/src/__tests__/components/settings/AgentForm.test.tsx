@@ -212,17 +212,10 @@ describe('AgentForm — Capabilities card', () => {
     expect(screen.getByText('0/2')).toBeTruthy()
   })
 
-  it('renders the MCP servers picker with available servers', async () => {
-    const user = userEvent.setup()
+  it('does not render an MCP server picker', () => {
     renderForm()
 
-    await user.click(comboboxIn('MCP servers'))
-
-    // Both server names appear as option rows; even the errored one stays
-    // pickable so an agent can keep referencing it during repair.
-    const listbox = screen.getByRole('listbox')
-    expect(within(listbox).getByText('context7')).toBeTruthy()
-    expect(within(listbox).getByText('filesystem')).toBeTruthy()
+    expect(screen.queryByText('MCP servers', { selector: 'span' })).toBeNull()
   })
 
   it('shows built-in tools separately from extra tool overrides', () => {
@@ -239,6 +232,15 @@ describe('AgentForm — Capabilities card', () => {
     expect(screen.getByText(/2 extra selected/i)).toBeTruthy()
   })
 
+  it('groups selected extra tools in a labelled selection list', () => {
+    renderForm(SAMPLE_RAW)
+
+    const selected = screen.getByLabelText('Selected tools')
+    expect(within(selected).getByText('shell')).toBeTruthy()
+    expect(within(selected).getByText('read')).toBeTruthy()
+    expect(within(selected).getByRole('button', { name: 'Remove shell' })).toBeTruthy()
+  })
+
   it('does not offer implicit lead-only or skill tools in the extra picker', async () => {
     const user = userEvent.setup()
     renderForm(SAMPLE_RAW)
@@ -249,12 +251,6 @@ describe('AgentForm — Capabilities card', () => {
     expect(within(listbox).queryByText('todo_manage')).toBeNull()
     expect(within(listbox).queryByText('schedule_task')).toBeNull()
     expect(within(listbox).queryByText('note')).toBeNull()
-  })
-
-  it('shows the picker hint with selected count', () => {
-    renderForm()
-    // Sample has one server selected (context7), two available.
-    expect(screen.getByText(/1 selected of 2 available/i)).toBeTruthy()
   })
 
   it('treats the code profile as additive over built-in defaults', () => {
@@ -269,24 +265,6 @@ model: openai:gpt-5.4
     expect(screen.getByText('Built-in OpenAgentd profile')).toBeTruthy()
     expect(screen.getByText(/Extra prompt/)).toBeTruthy()
     expect(screen.getByText(/Built-in tools are always included/i)).toBeTruthy()
-  })
-
-  it('renders the existing mcp selection as a chip', () => {
-    renderForm()
-    const trigger = comboboxIn('MCP servers')
-    // The chip renders `context7` text inside the trigger div.
-    expect(within(trigger).getByText('context7')).toBeTruthy()
-  })
-
-  it('falls back to the empty-state hint when no servers are configured', () => {
-    const original = [...mcpFixture.servers]
-    mcpFixture.servers.length = 0
-    try {
-      renderForm()
-      expect(screen.getByText(/No MCP servers configured/i)).toBeTruthy()
-    } finally {
-      mcpFixture.servers.push(...original)
-    }
   })
 
   it('shows only default and none when the selected model has no thinking metadata', async () => {
@@ -376,27 +354,5 @@ System prompt here
     } finally {
       registryFixture.models.splice(0, registryFixture.models.length, ...originalModels)
     }
-  })
-})
-
-// ── AgentForm — write-back into raw on selection ────────────────────────────
-
-describe('AgentForm — selecting an MCP server updates raw', () => {
-  it('appends the new server to the mcp: list in YAML', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderForm()
-
-    onChange.mockClear()
-
-    await user.click(comboboxIn('MCP servers'))
-    // The popover renders an unfiltered listbox — pick the not-yet-selected
-    // server.
-    const listbox = screen.getByRole('listbox')
-    await user.click(within(listbox).getByText('filesystem'))
-
-    const lastCall = onChange.mock.calls.at(-1)
-    expect(lastCall).toBeDefined()
-    const nextRaw = lastCall![0] as string
-    expect(nextRaw).toContain('mcp:\n  - context7\n  - filesystem')
   })
 })
