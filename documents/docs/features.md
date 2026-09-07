@@ -963,10 +963,12 @@ MCP.
 
 Four orthogonal ways to add capability.
 
-- **MCP servers** `[since v1.0]` — any Model Context Protocol server, hot-reloaded
-  via `POST /api/mcp/apply`. Per-agent scoping. OAuth-backed setup. Session Settings
-  can enable/disable scoped MCP servers and connect OAuth-backed servers in place `[v1.52.2]`.
-  Each scoped server gets its own row showing connection state and tool count, with a
+- **MCP servers** `[since v1.0; v2.10.0]` — any Model Context Protocol server,
+  hot-reloaded via `POST /api/mcp/apply`. A configured server is automatically
+  available to the coding agent; agent Markdown no longer needs a per-agent MCP
+  selection. OAuth-backed setup. Session Settings shows every configured server
+  and can enable/disable it globally or connect OAuth-backed servers in place
+  `[v1.52.2]`. Each server gets its own row showing connection state and tool count, with a
   toggle and an OAuth connect/reconnect action; the list re-polls while a server is
   starting so a freshly enabled server settles to ready in view `[v1.125.0]`.
   OAuth setup permits empty client ID and secret fields so servers that support

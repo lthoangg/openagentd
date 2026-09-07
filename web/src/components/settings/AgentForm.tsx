@@ -106,20 +106,6 @@ export function AgentForm({
         description: t.description,
       })) ?? []
 
-  // Show every server, including disabled / errored ones, so an agent can
-  // still reference a server that's temporarily down without the picker
-  // silently dropping the chip on save.
-  const mcpOptions: MultiSelectOption[] =
-    mcpServers.data?.servers.map((s) => {
-      const tools = s.tool_names.length
-      const detail = `${s.transport} · ${s.state} · ${tools} tool${tools === 1 ? '' : 's'}`
-      return {
-        value: s.name,
-        label: s.name,
-        description: detail,
-      }
-    }) ?? []
-
   const modelOptions = registry.data?.models ?? []
 
   // Form → raw propagation. Runs whenever a form field changes.
@@ -158,7 +144,6 @@ export function AgentForm({
           body={body}
           disabled={disabled}
           toolOptions={toolOptions}
-          mcpOptions={mcpOptions}
           modelOptions={modelOptions}
           effectiveTools={codeAgent.data?.config?.tools}
           updateFromForm={updateFromForm}

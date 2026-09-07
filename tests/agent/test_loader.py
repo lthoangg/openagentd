@@ -98,6 +98,23 @@ def test_build_agent_default_tools():
     assert "skill" in tool_names
 
 
+def test_build_agent_includes_all_configured_mcp_servers(monkeypatch):
+    factory, _ = _make_provider_factory()
+    cfg = AgentConfig(name="openagentd", model="zai:glm-5-turbo")
+    tools = _default_tool_registry()
+    server_tool = MagicMock()
+    server_tool.name = "github_create_issue"
+
+    from app.agent.mcp import mcp_manager
+
+    monkeypatch.setattr(mcp_manager, "server_names", lambda: ["github"])
+    monkeypatch.setattr(mcp_manager, "get_tools_for_server", lambda name: [server_tool])
+
+    agent = _build_agent(cfg, tools, factory)
+
+    assert agent.mcp_servers == ["github"]
+
+
 def test_load_agent_from_dir(tmp_path):
     d = _make_agents_dir(
         tmp_path,
