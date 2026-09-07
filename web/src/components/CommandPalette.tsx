@@ -235,7 +235,7 @@ function PaletteOverlay({ commands, onClose, workspaceFiles = [], filesTruncated
               value={query}
               onChange={(e) => handleQueryChange(e.target.value)}
               placeholder={hasFiles ? 'Search files…' : 'Search commands…'}
-              className="min-w-0 flex-1 bg-transparent text-xs text-(--color-text) placeholder-(--color-text-muted)/60 outline-none md:text-sm"
+              className="min-w-0 flex-1 border-none bg-transparent text-xs text-(--color-text) placeholder-(--color-text-muted)/60 outline-none ring-0 focus:border-none focus:outline-none focus:ring-0 focus-visible:border-none focus-visible:outline-none focus-visible:ring-0 md:text-sm"
               aria-label={hasFiles ? 'Search files' : 'Search commands'}
             />
             {query && (
@@ -332,7 +332,7 @@ function FileRow({ file, idx, isActive, onRun, onActivate }: FileRowProps) {
       type="button"
       onClick={() => onRun(file)}
       onMouseEnter={() => onActivate(idx)}
-      className={`group flex w-full min-w-0 items-center justify-between gap-3 rounded-sm border border-transparent px-2.5 py-1.5 text-left transition-colors ${
+      className={`group flex w-full min-w-0 items-center justify-between gap-3 rounded-sm border border-transparent px-2.5 py-1.5 text-left transition-colors focus:outline-none focus-visible:outline-none ${
         isActive
           ? 'border-(--color-border-strong) bg-(--bg-key)/60 text-(--color-text)'
           : 'text-(--color-text-2) hover:border-(--color-border) hover:bg-(--bg-card)'
@@ -371,7 +371,7 @@ function CommandRow({ cmd, idx, isActive, onRun, onActivate }: CommandRowProps) 
       type="button"
       onClick={() => onRun(cmd)}
       onMouseEnter={() => onActivate(idx)}
-      className={`group flex w-full min-w-0 items-center justify-between gap-3 rounded-sm border border-transparent px-2.5 py-1.5 text-left transition-colors ${
+      className={`group flex w-full min-w-0 items-center justify-between gap-3 rounded-sm border border-transparent px-2.5 py-1.5 text-left transition-colors focus:outline-none focus-visible:outline-none ${
         isActive
           ? 'border-(--color-border-strong) bg-(--bg-key)/60 text-(--color-text)'
           : 'text-(--color-text-2) hover:border-(--color-border) hover:bg-(--bg-card)'
