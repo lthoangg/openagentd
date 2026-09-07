@@ -22,7 +22,10 @@ describe("CommandPalette", () => {
 
   it("renders search input with placeholder", () => {
     render(<CommandPalette commands={makeCommands()} onClose={() => {}} />)
-    expect(screen.getByPlaceholderText("Search commands…")).toBeTruthy()
+    const input = screen.getByPlaceholderText("Search commands…")
+    expect(input).toBeTruthy()
+    expect(input.className).toContain("focus:outline-none")
+    expect(input.className).toContain("focus-visible:outline-none")
   })
 
   it("renders all commands initially", () => {
@@ -291,7 +294,10 @@ describe("CommandPalette", () => {
         onClose={() => {}}
       />,
     )
-    expect(screen.getByPlaceholderText("Search files…")).toBeTruthy()
+    const input = screen.getByPlaceholderText("Search files…")
+    expect(input).toBeTruthy()
+    expect(input.className).toContain("focus:outline-none")
+    expect(input.className).toContain("focus-visible:outline-none")
   })
 
   it("renders workspace files under a Files group header", () => {

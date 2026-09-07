@@ -17,6 +17,7 @@ ios-init: ## Initialize Tauri iOS project files
 	cd src-tauri && cargo tauri ios init
 	mkdir -p src-tauri/gen/apple && cp src-tauri/PrivacyInfo.xcprivacy src-tauri/gen/apple/PrivacyInfo.xcprivacy
 	./scripts/patch-launch-screen.sh
+	./scripts/patch-xcode-project.sh
 	$(MAKE) ios-icons
 
 $(IOS_ICON_STAMP): src-tauri/icons/icon.png
@@ -59,6 +60,7 @@ ios-web: ## Build bundled Web assets only when their inputs changed
 	fi
 
 ios-dev: ## Run on an iOS simulator/device
+	./scripts/patch-xcode-project.sh
 	cd src-tauri && cargo tauri ios dev --host
 
 ios-dev-device: ## Run on a named physical iOS device, e.g. `make ios-dev-device DeviceName`
@@ -74,6 +76,7 @@ ios-install-device: ## Build and install the production iOS app on a device
 		exit 2; \
 	fi
 	$(MAKE) ios-icons
+	./scripts/patch-xcode-project.sh
 	cd src-tauri && cargo tauri ios build --archive-only
 	xcrun devicectl device install app --device "$(IOS_DEVICE)" src-tauri/gen/apple/build/openagentd-mobile_iOS.xcarchive/Products/Applications/OpenAgentd.app
 
@@ -83,6 +86,7 @@ ios-install-device-fast: ## Build and install a bundled debug iOS app on a devic
 		exit 2; \
 	fi
 	$(MAKE) ios-icons
+	./scripts/patch-xcode-project.sh
 	cd src-tauri && cargo tauri ios build --debug --archive-only
 	xcrun devicectl device install app --device "$(IOS_DEVICE)" src-tauri/gen/apple/build/openagentd-mobile_iOS.xcarchive/Products/Applications/OpenAgentd.app
 
@@ -91,6 +95,7 @@ ios-install-device-fast: ## Build and install a bundled debug iOS app on a devic
 
 ios-build: ## Build the iOS app
 	$(MAKE) ios-icons
+	./scripts/patch-xcode-project.sh
 	cd src-tauri && cargo tauri ios build
 
 ios-clean: ## Remove generated iOS/Xcode state

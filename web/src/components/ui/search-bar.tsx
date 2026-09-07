@@ -116,7 +116,7 @@ function SearchBar({
           className={cn(
             'min-w-0 flex-1 bg-transparent py-2 text-xs text-(--color-text) md:py-1.5',
             'placeholder:text-(--color-text-muted)/60',
-            'outline-none',
+            'border-none outline-none ring-0 focus:border-none focus:outline-none focus:ring-0 focus-visible:border-none focus-visible:outline-none focus-visible:ring-0',
             // Remove browser-default search cancel button — we render our own
             '[&::-webkit-search-cancel-button]:appearance-none',
             className,

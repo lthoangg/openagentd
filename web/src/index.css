@@ -529,6 +529,12 @@ html[data-mobile-shell] .app-overlay-modal {
   border: 1px solid var(--color-border);
 }
 
+.app-overlay-palette input:focus,
+.app-overlay-palette input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 @media (min-width: 768px) {
   .app-overlay-palette {
     top: calc(var(--spacing-app-header) + 1.5rem);
@@ -1041,9 +1047,13 @@ html[data-app-hidden="true"] *::after {
 :root.dark {
   --focus-outline: #9DD0F5;
 }
-:where(button, input, textarea, select, a[href], [tabindex]):focus-visible {
+:where(button, select, a[href], [tabindex]):focus-visible {
   outline: 2px solid var(--focus-outline);
   outline-offset: 2px;
+}
+:where(input, textarea):focus,
+:where(input, textarea):focus-visible {
+  outline: none;
 }
 @media (pointer: coarse) {
   [data-slot="button"] {

@@ -1829,7 +1829,7 @@ def test_get_lsp_tools_reports_managed_component_state(monkeypatch) -> None:
             "state": "missing",
             "detail": None,
             "language_server_version": "6.0.0",
-            "typescript_version": "7.0.2",
+            "typescript_version": "6.0.3",
         },
     }
 

@@ -181,7 +181,7 @@ export function MultiSelect({
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKey}
             placeholder="Search…"
-            className="flex-1 bg-transparent text-xs text-(--color-text) outline-none placeholder:text-(--color-text-muted)"
+            className="flex-1 border-none bg-transparent text-xs text-(--color-text) outline-none ring-0 focus:border-none focus:outline-none focus:ring-0 focus-visible:border-none focus-visible:outline-none focus-visible:ring-0 placeholder:text-(--color-text-muted)"
             aria-label="Search options"
           />
           <span className="shrink-0 text-[11px] text-(--color-text-muted)">

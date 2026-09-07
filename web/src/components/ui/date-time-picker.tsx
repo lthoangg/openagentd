@@ -71,7 +71,7 @@ function TimeUnit({
       onChange={handleChange}
       onKeyDown={handleKey}
       aria-label={label}
-      className="h-7 w-10 rounded-xs border border-(--color-border) bg-(--bg-page) text-center text-xs font-mono font-medium tabular-nums text-(--color-text) outline-none transition-colors focus:border-(--focus-ring) focus:ring-1 focus:ring-(--focus-ring)/30"
+      className="h-7 w-10 rounded-xs border border-(--color-border) bg-(--bg-page) text-center text-xs font-mono font-medium tabular-nums text-(--color-text) outline-none transition-colors focus:border-(--focus-ring) focus:ring-1 focus:ring-(--focus-ring)/30 focus:outline-none focus-visible:outline-none"
     />
   )
 }
