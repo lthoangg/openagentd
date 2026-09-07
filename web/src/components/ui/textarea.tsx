@@ -14,7 +14,7 @@ function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
         // Typography — text-xs consistent with Input; callers override for code (text-[13px])
         "px-2.5 py-2 text-xs leading-relaxed text-(--color-text)",
         // Placeholder
-        "placeholder:text-(--color-text-muted)/60",
+        "placeholder:text-(--color-text-muted)",
         // Interaction — no hover border jump
         "outline-none transition-colors",
         "focus-visible:border-(--focus-ring) focus-visible:ring-2 focus-visible:ring-(--focus-ring)/30",

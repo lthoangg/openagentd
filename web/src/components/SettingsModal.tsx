@@ -11,7 +11,6 @@
  */
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowLeft, X, type LucideIcon } from 'lucide-react'
-import { useHotkey } from '@tanstack/react-hotkeys'
 import { lazy, Suspense } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -19,6 +18,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
+import { useModalFocus } from '@/hooks/useModalFocus'
+import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { useSettingsStore, type SettingsSection } from '@/stores/useSettingsStore'
 import {
   useDeniedPathsSettingsQuery,
@@ -205,36 +206,22 @@ function MobileTabBar({
   section: SettingsSection
   onSelect: (s: TopLevelSection) => void
 }) {
-  // Sections without their own tab are reached through About, so highlight it.
-  const active = mobileBackSection(section)
-  const items = SETTINGS_SECTIONS.filter((s) => s.mobileTab)
-
   return (
     <nav
       aria-label="Settings sections"
-      className="grid h-14 shrink-0 grid-cols-5 border-t border-(--color-border) bg-(--bg-sidebar) md:hidden"
+      className="shrink-0 border-t border-(--color-border) bg-(--bg-sidebar) p-2 md:hidden"
     >
-      {items.map((item) => {
-        const Icon = item.icon
-        const isActive = active === item.id
-        return (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => onSelect(item.id)}
-            aria-current={isActive ? 'page' : undefined}
-            className={cn(
-              'flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium transition-colors',
-              'text-(--color-text-muted) hover:bg-(--bg-key)/40 hover:text-(--color-text)',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-(--focus-ring)/40',
-              isActive && 'bg-(--bg-key)/55 text-(--color-text)',
-            )}
-          >
-            <Icon size={ICON_SIZE_INLINE} aria-hidden="true" />
-            <span className="truncate">{item.id === 'about' ? 'About' : item.label}</span>
-          </button>
-        )
-      })}
+      <select aria-label="Settings section" value={parentSection(section)}
+        className="min-h-11 w-full rounded-sm border border-(--color-border) bg-(--bg-input) px-3 text-base text-(--color-text)"
+        onChange={(event) => {
+          const item = SETTINGS_SECTIONS.find((candidate) => candidate.id === event.target.value)
+          if (item) onSelect(item.id)
+        }}>
+        {SETTINGS_GROUPS.map((group) => <optgroup key={group.id} label={group.label}>
+          {SETTINGS_SECTIONS.filter((item) => item.group === group.id).map((item) =>
+            <option key={item.id} value={item.id}>{item.label}</option>)}
+        </optgroup>)}
+      </select>
     </nav>
   )
 }
@@ -343,12 +330,13 @@ export function SettingsModal() {
   const selectedName = useSettingsStore((s) => s.selectedName)
   const setSection = useSettingsStore((s) => s.setSection)
   const closeSettings = useSettingsStore((s) => s.closeSettings)
+  const pendingNavigation = useSettingsStore((s) => s.pendingNavigation)
+  const resolveNavigation = useSettingsStore((s) => s.resolvePendingNavigation)
 
   const prefersReducedMotion = useReducedMotion()
   const panel = prefersReducedMotion ? PANEL_VARIANTS_REDUCED : PANEL_VARIANTS
 
-  // Escape to close.
-  useHotkey('Escape', closeSettings, { enabled: open })
+  useModalFocus(open, closeSettings)
 
   return (
     <AnimatePresence>
@@ -373,6 +361,7 @@ export function SettingsModal() {
             role="dialog"
             aria-modal="true"
             aria-label="Settings"
+            data-modal-focus="true"
             initial={panel.hidden}
             animate={panel.visible}
             exit={panel.hidden}
@@ -407,7 +396,7 @@ export function SettingsModal() {
                     <button
                       type="button"
                       onClick={closeSettings}
-                      className="flex h-8 w-8 items-center justify-center rounded-sm text-(--color-text-muted) hover:bg-(--bg-key) hover:text-(--color-text) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring) md:h-7 md:w-7"
+                      className="flex h-11 w-11 items-center justify-center rounded-sm text-(--color-text-muted) hover:bg-(--bg-key) hover:text-(--color-text) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring) md:h-7 md:w-7"
                       aria-label="Close settings"
                     >
                       <X size={14} aria-hidden="true" />
@@ -437,6 +426,16 @@ export function SettingsModal() {
             </div>
             <MobileTabBar section={section} onSelect={(s) => setSection(s)} />
           </motion.div>
+          <Dialog open={pendingNavigation !== null} onOpenChange={(next) => { if (!next) resolveNavigation(false) }}>
+            <DialogContent>
+              <DialogTitle>Discard unsaved settings?</DialogTitle>
+              <DialogDescription>Keep editing to save your changes, or discard them to continue.</DialogDescription>
+              <DialogFooter>
+                <Button onClick={() => resolveNavigation(false)}>Keep editing</Button>
+                <Button variant="danger" onClick={() => resolveNavigation(true)}>Discard changes</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </>
       )}
     </AnimatePresence>

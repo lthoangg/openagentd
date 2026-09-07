@@ -3,7 +3,7 @@
  */
 
 import { apiBaseUrl, apiUrl } from '../base-url'
-import { withTokenParam } from '../auth'
+import { apiAuthHeaders, withTokenParam } from '../auth'
 import { readSSE } from '../sse'
 import type { SSECallbacks } from '../sse'
 import { parseDetailOrThrow } from './_shared'
@@ -117,7 +117,8 @@ export async function cancelQueuedMessage(sessionId: string, messageId: string):
 }
 
 export function agentStream(sessionId: string, callbacks: SSECallbacks, signal?: AbortSignal): void {
-  fetch(withTokenParam(`${apiBaseUrl()}/agent/${encodeURIComponent(sessionId)}/stream`), { signal })
+  const url = `${apiBaseUrl()}/agent/${encodeURIComponent(sessionId)}/stream`
+  fetch(url, { signal, headers: apiAuthHeaders(url) })
     .then((res) => {
       if (!res.ok) throw new Error(`GET /agent/${sessionId}/stream failed: ${res.status}`)
       readSSE(res, callbacks)
@@ -230,9 +231,12 @@ export async function createWorktree(options: {
   return res.json()
 }
 
-export async function listCodingWorkspaceFiles(workspace: string): Promise<CodingWorkspaceFilesResponse> {
+export async function listCodingWorkspaceFiles(
+  workspace: string,
+  signal?: AbortSignal,
+): Promise<CodingWorkspaceFilesResponse> {
   const params = new URLSearchParams({ workspace })
-  const res = await fetch(`${apiBaseUrl()}/agent/workspace/files/list?${params}`)
+  const res = await fetch(`${apiBaseUrl()}/agent/workspace/files/list?${params}`, { signal })
   if (!res.ok) await parseDetailOrThrow(res, 'listCodingWorkspaceFiles')
   return res.json()
 }
@@ -240,6 +244,7 @@ export async function listCodingWorkspaceFiles(workspace: string): Promise<Codin
 export async function getCodingWorkspaceGitDiff(
   workspace: string,
   paths?: string[],
+  signal?: AbortSignal,
 ): Promise<WorkspaceGitDiffResponse> {
   const params = new URLSearchParams({ workspace })
   // Repeated ``paths`` params translate to FastAPI's
@@ -249,14 +254,17 @@ export async function getCodingWorkspaceGitDiff(
   if (paths && paths.length > 0) {
     for (const p of paths) params.append('paths', p)
   }
-  const res = await fetch(`${apiBaseUrl()}/agent/workspace/git-diff/view?${params}`)
+  const res = await fetch(`${apiBaseUrl()}/agent/workspace/git-diff/view?${params}`, { signal })
   if (!res.ok) await parseDetailOrThrow(res, 'getCodingWorkspaceGitDiff')
   return res.json()
 }
 
-export async function getCodingWorkspaceStatus(workspace: string): Promise<WorkspaceStatusResponse> {
+export async function getCodingWorkspaceStatus(
+  workspace: string,
+  signal?: AbortSignal,
+): Promise<WorkspaceStatusResponse> {
   const params = new URLSearchParams({ workspace })
-  const res = await fetch(`${apiBaseUrl()}/agent/workspace/status?${params}`)
+  const res = await fetch(`${apiBaseUrl()}/agent/workspace/status?${params}`, { signal })
   if (!res.ok) await parseDetailOrThrow(res, 'getCodingWorkspaceStatus')
   return res.json()
 }
@@ -266,12 +274,13 @@ export async function getCodingWorkspaceGitHistory(
   limit = 50,
   cursor?: string | null,
   all = false,
+  signal?: AbortSignal,
 ): Promise<WorkspaceGitHistoryResponse> {
   const params = new URLSearchParams({ workspace, limit: String(limit), all: String(all) })
   if (cursor) {
     params.set('cursor', cursor)
   }
-  const res = await fetch(`${apiBaseUrl()}/agent/workspace/git/history?${params}`)
+  const res = await fetch(`${apiBaseUrl()}/agent/workspace/git/history?${params}`, { signal })
   if (!res.ok) await parseDetailOrThrow(res, 'getCodingWorkspaceGitHistory')
   return res.json()
 }
@@ -279,9 +288,10 @@ export async function getCodingWorkspaceGitHistory(
 export async function getCodingWorkspaceCommitDiff(
   workspace: string,
   sha: string,
+  signal?: AbortSignal,
 ): Promise<WorkspaceCommitDiffResponse> {
   const params = new URLSearchParams({ workspace, sha })
-  const res = await fetch(`${apiBaseUrl()}/agent/workspace/git/commit-diff?${params}`)
+  const res = await fetch(`${apiBaseUrl()}/agent/workspace/git/commit-diff?${params}`, { signal })
   if (!res.ok) await parseDetailOrThrow(res, 'getCodingWorkspaceCommitDiff')
   return res.json()
 }
@@ -329,12 +339,13 @@ export async function listSessions(
   before?: string | null,
   limit = 20,
   filters?: { workspace?: string | null },
+  signal?: AbortSignal,
 ): Promise<SessionPageResponse> {
   const params = new URLSearchParams()
   if (before) params.set('before', before)
   params.set('limit', String(limit))
   if (filters?.workspace) params.set('workspace', filters.workspace)
-  const res = await fetch(`${apiBaseUrl()}/agent/sessions?${params}`)
+  const res = await fetch(`${apiBaseUrl()}/agent/sessions?${params}`, { signal })
   if (!res.ok) await parseDetailOrThrow(res, 'listSessions')
   return res.json()
 }
@@ -489,8 +500,11 @@ export async function dismissQuestion(
  * created yet (the agent hasn't written anything).  File bytes are fetched
  * via the ``/media/{path}`` proxy, not this endpoint — keep payloads small.
  */
-export async function listWorkspaceFiles(sessionId: string): Promise<WorkspaceFilesResponse> {
-  const res = await fetch(`${apiBaseUrl()}/agent/${encodeURIComponent(sessionId)}/files`)
+export async function listWorkspaceFiles(
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<WorkspaceFilesResponse> {
+  const res = await fetch(`${apiBaseUrl()}/agent/${encodeURIComponent(sessionId)}/files`, { signal })
   if (!res.ok) await parseDetailOrThrow(res, 'listWorkspaceFiles')
   return res.json()
 }

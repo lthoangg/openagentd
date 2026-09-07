@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "web/**"
+      - "app/**"
+      - "Makefile"
       - "desktop/src-tauri/tauri*.conf.json"
       - "desktop/src-tauri/Cargo.toml"
       - "desktop/src-tauri/Cargo.lock"
@@ -15,6 +17,8 @@ on:
     branches: [main]
     paths:
       - "web/**"
+      - "app/**"
+      - "Makefile"
       - "desktop/src-tauri/tauri*.conf.json"
       - "desktop/src-tauri/Cargo.toml"
       - "desktop/src-tauri/Cargo.lock"
@@ -45,6 +49,8 @@ jobs:
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
 
       - name: Cache Bun install cache
         uses: actions/cache@v6
@@ -68,3 +74,6 @@ jobs:
 
       - name: Tests
         run: bun run test
+
+      - name: Production build and bundle budgets
+        run: bun run build

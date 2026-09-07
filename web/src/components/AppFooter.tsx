@@ -77,7 +77,7 @@ export const AppFooter = memo(function AppFooter({
   const isCoding = Boolean(workspace)
   const statusQuery = useQuery({
     queryKey: queryKeys.coding.status(workspace ?? ''),
-    queryFn: () => getCodingWorkspaceStatus(workspace!),
+    queryFn: ({ signal }) => getCodingWorkspaceStatus(workspace!, signal),
     enabled: isCoding,
     staleTime: 10_000,
   })

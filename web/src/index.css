@@ -1033,6 +1033,25 @@ html[data-app-hidden="true"] *::after {
 .tool-desc .oa-prose code                 { font-size: 0.85em; color: var(--color-text-muted); background: var(--bg-key); }
 
 /* Tooltips disabled on mobile / touch devices */
+/* A solid keyboard outline remains visible independently of translucent
+ * decorative rings. Identity blue is unchanged; use its AA text tone. */
+:root {
+  --focus-outline: #174A73;
+}
+:root.dark {
+  --focus-outline: #9DD0F5;
+}
+:where(button, input, textarea, select, a[href], [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 2px;
+}
+@media (pointer: coarse) {
+  [data-slot="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
 @media (max-width: 767px), (pointer: coarse) {
   [data-slot="tooltip-content"] {
     display: none !important;

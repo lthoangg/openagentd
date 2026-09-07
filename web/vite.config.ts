@@ -131,7 +131,8 @@ export default defineConfig({
     // waterfalls on tauri:// navigation; the Settings modal's pages are lazy
     // because a modal is not on that path. Measured baseline after that split:
     // ~1260 kB minified / ~364 kB gzip. The limit sits just above it so any
-    // regression that drags more into the shell fails loudly.
+    // regression is visible in Vite output. check:budget enforces the actual
+    // eager graph and compressed-byte limits as a failing build check.
     chunkSizeWarningLimit: 1300,
   },
 })

@@ -730,10 +730,9 @@ describe('CodingSidebar workspace trust flow', () => {
   it('renders Telemetry in mobile sidebar footer, but no search bar or top nav item', async () => {
     isMobile = true
     const onMobileClose = mock(() => {})
-    const onQuickOpen = mock(() => {})
     const onCommandPalette = mock(() => {})
 
-    await renderCodingSidebarWithProps({ mobileOpen: true, onMobileClose, onQuickOpen, onCommandPalette })
+    await renderCodingSidebarWithProps({ mobileOpen: true, onMobileClose, onCommandPalette })
 
     expect(screen.getAllByRole('button', { name: 'Telemetry' })).toHaveLength(1)
     expect(screen.queryByRole('button', { name: 'Open Quick Open' })).toBeNull()
@@ -752,15 +751,12 @@ describe('CodingSidebar workspace trust flow', () => {
     expect(onMobileClose).toHaveBeenCalledTimes(1)
   })
 
-  it('renders search bar on desktop when onQuickOpen is provided', async () => {
+  it('does not render a search bar on desktop', async () => {
     isMobile = false
-    const onQuickOpen = mock(() => {})
 
-    await renderCodingSidebarWithProps({ onQuickOpen })
+    await renderCodingSidebarWithProps({})
 
-    const searchBtn = screen.getByRole('button', { name: 'Open Quick Open' })
-    fireEvent.click(searchBtn)
-    expect(onQuickOpen).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: 'Open Quick Open' })).toBeNull()
   })
 
   it('does not navigate or save the last workspace until the user trusts the validated directory', async () => {

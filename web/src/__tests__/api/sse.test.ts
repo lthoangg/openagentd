@@ -22,6 +22,20 @@ function fakeResponse(text: string): Response {
 // ---------------------------------------------------------------------------
 
 describe("readSSE", () => {
+  it("reports event-handler failures as execution errors, not malformed JSON", async () => {
+    const errors: Error[] = []
+    const parseErrors: Error[] = []
+    await new Promise<void>((resolve) => {
+      readSSE(fakeResponse('data: {}\n\n'), {
+        onEvent: () => { throw new Error('handler failed') },
+        onParseError: (error) => parseErrors.push(error),
+        onError: (error) => { errors.push(error); resolve() },
+        onDone: resolve,
+      })
+    })
+    expect(parseErrors).toHaveLength(0)
+    expect(errors[0]?.message).toBe('handler failed')
+  })
   it("dispatches a single event with event: and data: fields", async () => {
     const events: Array<{ type: string; data: unknown }> = [];
     let done = false;

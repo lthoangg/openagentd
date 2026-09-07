@@ -963,6 +963,15 @@ class TestMarkDone:
         _turns["sid-1"].subscribers.append(q)
 
         await store.mark_done("sid-1")  # Me should not raise
+        assert q.get_nowait() is _SENTINEL
+
+    async def test_shutdown_unblocks_subscribers(self):
+        await store.init_turn("sid-1")
+        q = asyncio.Queue(maxsize=1)
+        q.put_nowait("output")
+        _turns["sid-1"].subscribers.append(q)
+        await store.close()
+        assert q.get_nowait() is _SENTINEL
 
 
 # ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 title: Features
 description: Canonical, version-cited catalogue of shipped user-visible OpenAgentd features.
 status: stable
-updated: 2026-09-03
+updated: 2026-09-05
 ---
 
 # Features
@@ -51,6 +51,15 @@ The product's primary coding surface. A native double-click app on macOS, Window
 and Linux that hosts the same FastAPI sidecar + React UI you would otherwise
 run from the terminal.
 
+- **Settings draft protection and mobile navigation** `[v2.10.0]` — unsaved
+  drafts survive remote refreshes and edits made during a save. Shared settings
+  pages and source editors ask before discarding changes on internal navigation
+  or close. Mobile exposes every settings category in a grouped section picker.
+  Nested confirmation dialogs keep keyboard focus and Escape handling in the
+  innermost dialog; shared tabs support arrow keys and Home/End.
+- **Reliable Git history paging** `[v2.10.0]` — commit and graph pages advance
+  together in single-branch and all-branch views. Commit lists provide an
+  explicit Load more action and a retry action for failed history requests.
 - **Native desktop app for macOS, Windows, Linux** `[since v1.0; Windows restored v1.106.0]` — Tauri 2 shell,
   bundled Python sidecar, embedded Web UI, one process, no terminal required.
 - **Explicit backend connection state** `[v1.68.0, v1.99.8, v1.113.0]` — desktop connection options
@@ -76,8 +85,9 @@ run from the terminal.
   settings sidebar is grouped into **Agents & tools**, **Models**, **System**,
   and **About** instead of one flat list. **Title generation**, **Summarization**
   and **Multimodal** are consolidated into a single **Automation** section whose
-  three groups can be collapsed independently and save independently, so a
-  validation error in one never blocks another. Every section now saves the same
+  three groups can be collapsed independently. The shared save bar saves edited
+  groups together; validation in an untouched group does not block saving,
+  while every edited group must be valid. Every section now saves the same
   way: a sticky bar appears only when there are unsaved edits, with Reset, Save,
   and a `Cmd/Ctrl+S` binding. Notifications no longer writes on toggle, and
   reopening Settings returns to the section you left.

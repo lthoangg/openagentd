@@ -330,10 +330,22 @@ function installXhrInterceptor(): void {
  * `<a download href="/api/...">` links the browser can't add headers to).
  */
 export function withTokenParam(url: string): string {
+  if (!isLocalApiRequest(url)) return url
   const token = getToken(url)
   if (!token) return url
-  const sep = url.includes('?') ? '&' : '?'
-  return `${url}${sep}_token=${encodeURIComponent(token)}`
+  const base = apiBaseUrl()
+  const parsed = new URL(url, base.startsWith('http') ? base : window.location.origin)
+  parsed.searchParams.set('_token', token)
+  parsed.search = parsed.search.replaceAll('+', '%20')
+  return url.startsWith('/') && !url.startsWith('//')
+    ? `${parsed.pathname}${parsed.search}${parsed.hash}`
+    : parsed.toString()
+}
+
+/** Explicit header auth also works before the global fetch interceptor boots. */
+export function apiAuthHeaders(url: string): Record<string, string> {
+  const token = isLocalApiRequest(url) ? getToken(url) : undefined
+  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 export function isDesktopMode(): boolean {

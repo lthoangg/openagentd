@@ -54,6 +54,10 @@ export function parentSection(section: SettingsSection): SettingsSection {
 
 interface SettingsStore {
   open: boolean
+  dirtyDrafts: Record<string, boolean>
+  pendingNavigation: { section?: SettingsSection; name?: string | null; close?: boolean } | null
+  setDraftDirty: (id: string, dirty: boolean) => void
+  resolvePendingNavigation: (discard: boolean) => void
   section: SettingsSection
   /** Name param for editor views (skills-edit, mcp-edit). */
   selectedName: string | null
@@ -69,16 +73,37 @@ interface SettingsStore {
 
 export const useSettingsStore = create<SettingsStore>()(
   persist(
-    immer((set) => {
+    immer((set, get) => {
       // Register closeSettings with UIStore so its toggle actions can close
       // the settings modal without creating a circular import.
       _registerCloseSettings(() => useSettingsStore.getState().closeSettings())
 
       return {
         open: false,
+        dirtyDrafts: {},
+        pendingNavigation: null,
+        setDraftDirty: (id, dirty) => set((state) => {
+          if (dirty) state.dirtyDrafts[id] = true
+          else delete state.dirtyDrafts[id]
+        }),
+        resolvePendingNavigation: (discard) => set((state) => {
+          const pending = state.pendingNavigation
+          state.pendingNavigation = null
+          if (!discard || !pending) return
+          state.dirtyDrafts = {}
+          if (pending.close) state.open = false
+          else if (pending.section) {
+            state.section = pending.section
+            state.selectedName = pending.name ?? null
+          }
+        }),
         section: 'about',
         selectedName: null,
         openSettings: (section, name = null) => {
+          if (get().open && section !== undefined && Object.keys(get().dirtyDrafts).length) {
+            get().setSection(section, name)
+            return
+          }
           useUIStore.getState().closeAll()
           set((state) => {
             state.open = true
@@ -91,11 +116,20 @@ export const useSettingsStore = create<SettingsStore>()(
         },
         setSection: (section, name = null) =>
           set((state) => {
+            if (section === state.section && name === state.selectedName) return
+            if (Object.keys(state.dirtyDrafts).length) {
+              state.pendingNavigation = { section, name }
+              return
+            }
             state.section = section
             state.selectedName = name ?? null
           }),
         closeSettings: () =>
           set((state) => {
+            if (Object.keys(state.dirtyDrafts).length) {
+              state.pendingNavigation = { close: true }
+              return
+            }
             state.open = false
           }),
       }

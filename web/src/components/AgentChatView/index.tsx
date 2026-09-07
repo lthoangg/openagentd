@@ -405,7 +405,6 @@ export function AgentChatView({ sessionId, workspace = null, codingSessionLoadin
             workspace={workspace}
             onCollapse={() => setCodingSidebarCollapsed(true)}
             openWorkspaceDialogKey={openWorkspaceDialogKey}
-            onQuickOpen={handleToggleQuickOpen}
             onCommandPalette={handleTogglePalette}
             desktopCollapsed={codingSidebarCollapsed}
             mobileOpen={mobileSidebarOpen}

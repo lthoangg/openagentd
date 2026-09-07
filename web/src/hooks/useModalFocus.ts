@@ -33,6 +33,7 @@ export function useModalFocus(
       const dialogs = document.querySelectorAll<HTMLElement>('[data-modal-focus="true"]')
       return dialogs[dialogs.length - 1] ?? null
     }
+    const dialog = getDialog()
     const isVisible = (el: HTMLElement) => el.getClientRects().length > 0
     const focusFirst = () => {
       const preferred = initialFocusRef.current?.current
@@ -40,22 +41,22 @@ export function useModalFocus(
         preferred.focus()
         return
       }
-      const dialog = getDialog()
-      const target = dialog?.querySelector<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-      )
-      if (target && isVisible(target)) target.focus()
+      const target = Array.from(dialog?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? []).find(isVisible)
+      target?.focus()
     }
     const id = requestAnimationFrame(focusFirst)
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || !dialog || getDialog() !== dialog) return
       if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopImmediatePropagation()
         onCloseRef.current?.()
         return
       }
       if (event.key !== 'Tab') return
-      const dialog = getDialog()
-      if (!dialog) return
       const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(
         'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
       )).filter((el) => !el.hasAttribute('disabled') && isVisible(el))

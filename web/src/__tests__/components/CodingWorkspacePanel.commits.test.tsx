@@ -102,6 +102,17 @@ async function renderCommitsTab(mobile = false) {
 }
 
 describe('CodingWorkspacePanel – commit body expand/collapse', () => {
+  it('offers a manual load-more action after a cold history load', async () => {
+    const previous = globalThis.fetch
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/workspace/git/history')) {
+        return new Response(JSON.stringify({ ...historyResponse, next_cursor: 'older-cursor' }))
+      }
+      return previous(input, init)
+    }) as typeof fetch
+    await renderCommitsTab()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Load more commits' })).toBeTruthy())
+  })
   it('renders commit subjects without showing the body by default', async () => {
     await renderCommitsTab()
 

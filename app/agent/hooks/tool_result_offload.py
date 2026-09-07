@@ -52,6 +52,7 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -59,6 +60,7 @@ from loguru import logger
 
 from app.agent.artifacts import tool_results_dir
 from app.agent.hooks.base import BaseAgentHook
+from app.core.secret_files import write_secret_file
 
 if TYPE_CHECKING:
     from app.agent.state import AgentState, RunContext
@@ -211,6 +213,9 @@ class ToolResultOffloadHook(BaseAgentHook):
         """Write full tool result to session metadata below ``.openagentd``."""
         offload_dir = tool_results_dir(agent_name, session_id)
         offload_dir.mkdir(parents=True, exist_ok=True)
-        dest = offload_dir / f"{tool_call_id}.txt"
-        dest.write_text(content, encoding="utf-8")
+        # Provider IDs are metadata, never filesystem paths. Atomic replacement
+        # also prevents an existing filename symlink from redirecting the write.
+        filename = hashlib.sha256(tool_call_id.encode("utf-8")).hexdigest()
+        dest = offload_dir / f"{filename}.txt"
+        write_secret_file(dest, content)
         return dest

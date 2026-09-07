@@ -15,14 +15,14 @@
  * `AgentPane` for split/unified modes.
  */
 
-import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo, memo, lazy, Suspense } from 'react'
 import OctobotMascot from '@/assets/brand/octobot-agentd-source.png'
 
 import { LazyMarkdownBlock } from '@/utils/LazyMarkdownBlock'
 import { ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
 import { Thinking } from './Thinking'
 import { ToolCall } from './ToolCall'
-import { MCPAppResult } from './MCPAppResult'
+const MCPAppResult = lazy(() => import('./MCPAppResult').then((module) => ({ default: module.MCPAppResult })))
 import { CompactionDivider } from './CompactionDivider'
 import { AssistantTurn } from './AssistantTurnFooter'
 import { PendingMessageQueue } from './PendingMessageQueue'
@@ -150,7 +150,9 @@ const BlockRenderer = memo(function BlockRenderer({ block, isStreaming, sessionI
           />
           {block.toolDone && Boolean(mcpApp) && latestMCPAppBlockIds?.has(block.id) ? (
             <div className="mt-2">
-              <MCPAppResult mcpApp={mcpApp as never} sessionId={sessionId} toolCallId={block.toolCallId} />
+              <Suspense fallback={<p role="status" className="min-h-24 text-xs text-(--color-text-muted)">Loading interactive tool result...</p>}>
+                <MCPAppResult mcpApp={mcpApp as never} sessionId={sessionId} toolCallId={block.toolCallId} />
+              </Suspense>
             </div>
           ) : null}
         </div>
@@ -407,7 +409,7 @@ export function AgentView({ blocks, currentBlocks, isWorking, isTurnOpen = isWor
     {showScrollBtn && (
         <button
           onClick={() => scrollToBottom('smooth')}
-          className="absolute bottom-16 left-1/2 z-10 -translate-x-1/2 rounded-sm border border-(--color-border) bg-(--bg-card) p-1 text-(--color-text-muted) transition-colors hover:bg-(--bg-key) hover:text-(--color-text-2)"
+          className="absolute bottom-16 left-1/2 z-10 flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-sm border border-(--color-border) bg-(--bg-card) p-1 text-(--color-text-muted) transition-colors hover:bg-(--bg-key) hover:text-(--color-text-2) md:h-8 md:w-8"
           aria-label="Scroll to bottom"
         >
           <ChevronDown size={16} />

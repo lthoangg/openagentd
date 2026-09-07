@@ -3,7 +3,6 @@
  * route. Mirrors the wireframe sidebar ``Q4zeZN`` in
  * ``.diagrams/OpenAgentd-ui.pen``:
  *
- *   • Search input at the top — opens the command palette (⌘P / Ctrl+P).
  *   • Flat list of repositories, worktrees, and their coding sessions.
  *     Worktree/session grouping is shown with icons, counts, and spacing
  *     rather than file-tree indentation.
@@ -38,7 +37,6 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
-  Search,
   Settings,
   Trash2,
   X,
@@ -116,8 +114,6 @@ interface CodingSidebarProps {
   /** Bump this counter to programmatically open the workspace dialog
    *  (e.g. from a "no workspace attached" CTA). */
   openWorkspaceDialogKey?: number
-  /** Open Quick Open file search (desktop search input). */
-  onQuickOpen?: () => void
   /** Open the command palette (footer help (?) button). */
   onCommandPalette?: () => void
   /** Desktop only: when true, the inline panel collapses to width=0. */
@@ -145,7 +141,6 @@ export function CodingSidebar({
   workspace,
   onCollapse,
   openWorkspaceDialogKey = 0,
-  onQuickOpen,
   onCommandPalette,
   desktopCollapsed = false,
   mobileOpen = false,
@@ -667,30 +662,6 @@ export function CodingSidebar({
           onPointerDown={resizable.startResize}
           onDoubleClick={resizable.resetWidth}
         />
-      )}
-
-      {/* Search trigger — opens Quick Open (⌘P / Ctrl+P) on desktop. */}
-      {!isMobile && onQuickOpen && (
-        <div className="px-3 py-3">
-          <Tooltip className="w-full">
-            <TooltipTrigger
-              className="w-full"
-              render={
-                <button
-                  type="button"
-                  onClick={onQuickOpen}
-                  className="flex h-8 w-full items-center gap-2 rounded-md border border-(--color-border) bg-(--bg-page) px-2.5 text-left text-xs text-(--color-text-muted) transition-colors hover:bg-(--bg-key) hover:text-(--color-text-2)"
-                  aria-label="Open Quick Open"
-                >
-                  <Search size={13} aria-hidden="true" />
-                  <span className="flex-1">Search…</span>
-                  <kbd className="font-mono text-[10px] text-(--color-text-subtle)">^P</kbd>
-                </button>
-              }
-            />
-            <TooltipContent>{`Open Quick Open (${formatShortcut('P', os)})`}</TooltipContent>
-          </Tooltip>
-        </div>
       )}
 
       {/* Workspace + sessions tree */}

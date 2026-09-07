@@ -41,7 +41,8 @@ export const WORKSPACE_TREE_STALE_MS = 5_000
 export function workspaceFilesQueryOptions(sessionId: string) {
   return {
     queryKey: queryKeys.session.files(sessionId),
-    queryFn: (): Promise<WorkspaceFilesResponse> => listWorkspaceFiles(sessionId),
+    queryFn: ({ signal }: { signal: AbortSignal }): Promise<WorkspaceFilesResponse> =>
+      listWorkspaceFiles(sessionId, signal),
   }
 }
 
@@ -49,7 +50,7 @@ export function workspaceFilesQueryOptions(sessionId: string) {
 export function codingWorkspaceFilesQueryOptions(workspace: string) {
   return {
     queryKey: queryKeys.coding.files(workspace),
-    queryFn: (): Promise<CodingWorkspaceFilesResponse> =>
-      listCodingWorkspaceFiles(workspace),
+    queryFn: ({ signal }: { signal: AbortSignal }): Promise<CodingWorkspaceFilesResponse> =>
+      listCodingWorkspaceFiles(workspace, signal),
   }
 }

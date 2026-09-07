@@ -128,13 +128,13 @@ export function CodingWorkspacePanel({
   })
   const diff = useQuery({
     queryKey: queryKeys.coding.diff(workspace),
-    queryFn: () => getCodingWorkspaceGitDiff(workspace),
+    queryFn: ({ signal }) => getCodingWorkspaceGitDiff(workspace, undefined, signal),
     enabled: open,
     staleTime: 5_000,
   })
   const workspaceStatus = useQuery({
     queryKey: queryKeys.coding.status(workspace),
-    queryFn: () => getCodingWorkspaceStatus(workspace),
+    queryFn: ({ signal }) => getCodingWorkspaceStatus(workspace, signal),
     enabled: open,
     staleTime: 10_000,
   })
@@ -171,7 +171,7 @@ export function CodingWorkspacePanel({
 
   const gitHistory = useInfiniteQuery({
     queryKey: queryKeys.coding.history(workspace, historyLimit, allBranches),
-    queryFn: ({ pageParam }) => getCodingWorkspaceGitHistory(workspace, historyLimit, pageParam, allBranches),
+    queryFn: ({ pageParam, signal }) => getCodingWorkspaceGitHistory(workspace, historyLimit, pageParam, allBranches, signal),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? null,
     enabled: open && activeTabId === 'review' && (subTab === 'commits' || subTab === 'tree'),
@@ -236,7 +236,7 @@ export function CodingWorkspacePanel({
 
   const commitDiff = useQuery({
     queryKey: queryKeys.coding.commitDiff(workspace, expandedCommitSha ?? ''),
-    queryFn: () => getCodingWorkspaceCommitDiff(workspace, expandedCommitSha ?? ''),
+    queryFn: ({ signal }) => getCodingWorkspaceCommitDiff(workspace, expandedCommitSha ?? '', signal),
     enabled: open && activeTabId === 'review' && subTab === 'commits' && expandedCommitSha !== null,
     staleTime: 30_000,
   })

@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { ICON_SIZE, TEXT } from '@/components/settings/tokens'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
+import { useUnsavedSettings } from '@/hooks/useUnsavedSettings'
 import type { DraftControls } from '@/components/settings/useSettingsDraft'
 import { EASINGS } from '@/lib/motion'
 
@@ -48,6 +49,7 @@ export function SettingsPage({
   error,
   children,
 }: SettingsPageProps) {
+  useUnsavedSettings(Boolean(draft?.dirty || draft?.isSaving))
   // Read through a ref inside the handler so the listener is bound once per
   // page rather than re-bound on every keystroke: `draft.save` and `canSave`
   // both change identity whenever the draft value does.

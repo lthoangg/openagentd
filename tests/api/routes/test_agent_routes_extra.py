@@ -355,14 +355,20 @@ class TestTeamAgentsRouteExtra:
             "app.api.routes.agent.files._MAX_GIT_DIFF_CHARS",
             10,
         )
+
+        async def fake_bounded_git_diff(*args, **kwargs):
+            return "x" * 11, "", 0, True
+
+        def fake_run(*args, **kwargs):
+            command = args[0]
+            assert "ls-files" not in command
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
         monkeypatch.setattr(
-            "app.api.routes.agent.files.subprocess.run",
-            lambda *args, **kwargs: SimpleNamespace(
-                returncode=0,
-                stdout="x" * 20,
-                stderr="",
-            ),
+            "app.api.routes.agent.files._run_bounded_git_diff",
+            fake_bounded_git_diff,
         )
+        monkeypatch.setattr("app.api.routes.agent.files.subprocess.run", fake_run)
         client = TestClient(app_without_team)
 
         resp = client.get(
@@ -385,7 +391,14 @@ class TestTeamAgentsRouteExtra:
                 return SimpleNamespace(returncode=0, stdout="test.py\n", stderr="")
             return SimpleNamespace(returncode=0, stdout="", stderr="")
 
+        async def fake_bounded_git_diff(*args, **kwargs):
+            return "", "", 0, False
+
         monkeypatch.setattr("app.api.routes.agent.files.subprocess.run", fake_run)
+        monkeypatch.setattr(
+            "app.api.routes.agent.files._run_bounded_git_diff",
+            fake_bounded_git_diff,
+        )
         client = TestClient(app_without_team)
 
         resp = client.get(
@@ -462,10 +475,6 @@ class TestTeamAgentsRouteExtra:
 
         def fake_run(*args, **kwargs):
             command = args[0]
-            # ``git diff -- <pathspecs>``
-            if "diff" in command:
-                captured_diff_args.append(command)
-                return SimpleNamespace(returncode=0, stdout="", stderr="")
             if command[3:6] == ["ls-files", "--others", "--exclude-standard"]:
                 # Both files are untracked; the route must filter to the
                 # ones the caller asked about.
@@ -476,7 +485,15 @@ class TestTeamAgentsRouteExtra:
                 )
             return SimpleNamespace(returncode=0, stdout="", stderr="")
 
+        async def fake_bounded_git_diff(cwd, args, **kwargs):
+            captured_diff_args.append(["git", "-C", cwd, *args])
+            return "", "", 0, False
+
         monkeypatch.setattr("app.api.routes.agent.files.subprocess.run", fake_run)
+        monkeypatch.setattr(
+            "app.api.routes.agent.files._run_bounded_git_diff",
+            fake_bounded_git_diff,
+        )
         client = TestClient(app_without_team)
 
         resp = client.get(
@@ -527,20 +544,61 @@ class TestTeamAgentsRouteExtra:
         assert body["workspace"] == str(tmp_path.resolve())
         assert body["name"] == tmp_path.name
 
+    def test_workspace_status_reuses_porcelain_upstream_counts(
+        self, app_without_team, tmp_path, monkeypatch
+    ):
+        (tmp_path / ".git").mkdir()
+        calls: list[list[str]] = []
+
+        def fake_run(command, *args, **kwargs):
+            git_args = command[3:]
+            calls.append(git_args)
+            if git_args[:1] == ["status"]:
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout=(
+                        "# branch.head main\n"
+                        "# branch.upstream origin/main\n"
+                        "# branch.ab +2 -1\n"
+                    ),
+                    stderr="",
+                )
+            if git_args[:1] == ["log"]:
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout="abc1234\x00fix scroll\x001700000000\n",
+                    stderr="",
+                )
+            return SimpleNamespace(returncode=1, stdout="", stderr="")
+
+        monkeypatch.setattr("app.api.routes.agent.files.subprocess.run", fake_run)
+        client = TestClient(app_without_team)
+
+        resp = client.get(
+            "/api/agent/workspace/status", params={"workspace": str(tmp_path)}
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["commits_ahead"] == 2
+        assert body["commits_behind"] == 1
+        assert body["upstream"] == "origin/main"
+        assert all(args[0] not in {"rev-list", "rev-parse"} for args in calls)
+
     def test_workspace_status_git_repo(self, app_without_team, tmp_path, monkeypatch):
         (tmp_path / ".git").mkdir()
 
-        # Two git calls: status (porcelain v2) then log. Order matches the
-        # endpoint's call order so a queue is the simplest fake.
+        # Status and log are followed by one combined divergence query and
+        # upstream-name lookup when porcelain has no upstream metadata.
         outputs = [
             # status --porcelain=v2 --branch
             "# branch.head main\n1 M. N... 100644 100644 100644 a a fileA\n? newfile.txt\n",
             # log -1
             "abc1234\x00fix scroll\x001700000000\n",
-            # rev-list --count HEAD ^@{u}
-            "2\n",
-            # rev-list --count @{u} ^HEAD
-            "1\n",
+            # rev-list --left-right --count HEAD...@{u}
+            "2\t1\n",
+            # rev-parse --abbrev-ref @{u}
+            "origin/main\n",
         ]
 
         def fake_run(*args, **kwargs):
@@ -585,7 +643,7 @@ class TestTeamAgentsRouteExtra:
                     stdout="def456\x00new branch feature\x001700000000\n",
                     stderr="",
                 )
-            if "^@{u}" in args_str:
+            if "HEAD...@{u}" in args_str:
                 return SimpleNamespace(
                     returncode=128, stdout="", stderr="fatal: no upstream configured"
                 )
@@ -595,14 +653,8 @@ class TestTeamAgentsRouteExtra:
                 )
             if "rev-parse" in args_str and "origin/HEAD" in args_str:
                 return SimpleNamespace(returncode=0, stdout="123456\n", stderr="")
-            if "rev-list" in args_str and "^origin/HEAD" in args_str:
-                return SimpleNamespace(returncode=0, stdout="3\n", stderr="")
-            if (
-                "rev-list" in args_str
-                and "origin/HEAD" in args_str
-                and "^HEAD" in args_str
-            ):
-                return SimpleNamespace(returncode=0, stdout="0\n", stderr="")
+            if "rev-list" in args_str and "HEAD...origin/HEAD" in args_str:
+                return SimpleNamespace(returncode=0, stdout="3\t0\n", stderr="")
             return SimpleNamespace(returncode=1, stdout="", stderr="error")
 
         monkeypatch.setattr("app.api.routes.agent.files.subprocess.run", fake_run)

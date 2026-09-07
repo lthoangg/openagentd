@@ -578,38 +578,40 @@ async def get_coding_workspace_git_diff(
     diff_args = ["diff", "HEAD"] if has_head else ["diff"]
 
     try:
-        result = await asyncio.to_thread(
-            subprocess.run,
-            ["git", "-C", resolved, *diff_args, "--", *diff_paths],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
+        (
+            tracked_diff,
+            stderr,
+            returncode,
+            tracked_truncated,
+        ) = await _run_bounded_git_diff(
+            resolved,
+            [*diff_args, "--", *diff_paths],
+            max_bytes=_MAX_GIT_DIFF_CHARS,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise HTTPException(status_code=500, detail=f"git diff failed: {exc}") from exc
 
-    if result.returncode != 0:
-        raise HTTPException(
-            status_code=500, detail=result.stderr.strip() or "git diff failed"
+    if returncode != 0 and not tracked_truncated:
+        raise HTTPException(status_code=500, detail=stderr.strip() or "git diff failed")
+    untracked: list[str] = []
+    full_diff = tracked_diff
+    if not tracked_truncated:
+        untracked_out = await _run_git(
+            resolved, "ls-files", "--others", "--exclude-standard"
         )
-    untracked_out = await _run_git(
-        resolved, "ls-files", "--others", "--exclude-standard"
-    )
-    untracked = untracked_out.splitlines() if untracked_out is not None else []
-    # When scoped, only synthesise untracked diffs for paths the caller
-    # asked about — otherwise the response would carry diff hunks for
-    # files the SSE bridge has no reason to splice.
-    if scoped:
-        scoped_set = set(scoped)
-        untracked = [u for u in untracked if u in scoped_set]
-    tracked_diff = str(result.stdout)
-    # to_thread: reads up to 256KB per untracked file and runs difflib on
-    # each — measured ~100ms inline for 30 ~200KB files, scaling linearly
-    # with untracked-file count. Keep it off the event loop like every
-    # other blocking call in this route.
-    full_diff = tracked_diff + await asyncio.to_thread(_untracked_diff, root, untracked)
-    truncated = len(full_diff) > _MAX_GIT_DIFF_CHARS
+        untracked = untracked_out.splitlines() if untracked_out is not None else []
+        # When scoped, only synthesise untracked diffs for paths the caller
+        # asked about — otherwise the response would carry diff hunks for
+        # files the SSE bridge has no reason to splice.
+        if scoped:
+            scoped_set = set(scoped)
+            untracked = [u for u in untracked if u in scoped_set]
+        # to_thread: reads up to 256KB per untracked file and runs difflib on
+        # each — measured ~100ms inline for 30 ~200KB files, scaling linearly
+        # with untracked-file count. Keep it off the event loop like every
+        # other blocking call in this route.
+        full_diff += await asyncio.to_thread(_untracked_diff, root, untracked)
+    truncated = tracked_truncated or len(full_diff) > _MAX_GIT_DIFF_CHARS
     diff = full_diff[:_MAX_GIT_DIFF_CHARS]
     return CodingWorkspaceGitDiffResponse(
         workspace=resolved,
@@ -620,11 +622,87 @@ async def get_coding_workspace_git_diff(
     )
 
 
+async def _run_bounded_git_diff(
+    cwd: str, args: list[str], *, max_bytes: int, timeout: float = 10.0
+) -> tuple[str, str, int, bool]:
+    """Run ``git diff`` without retaining output beyond the response budget."""
+    process = await asyncio.create_subprocess_exec(
+        "git",
+        "-C",
+        cwd,
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout = bytearray()
+    stderr = bytearray()
+    stdout_limit = max_bytes + 1
+    stderr_limit = 64 * 1024
+    output_exceeded = asyncio.Event()
+    stream_exceeded = asyncio.Event()
+    stdout_stream = process.stdout
+    stderr_stream = process.stderr
+    assert stdout_stream is not None
+    assert stderr_stream is not None
+
+    async def drain(
+        stream: asyncio.StreamReader,
+        output: bytearray,
+        limit: int,
+        exceeded: asyncio.Event | None = None,
+    ) -> None:
+        while chunk := await stream.read(64 * 1024):
+            remaining = limit - len(output)
+            if remaining > 0:
+                output.extend(chunk[:remaining])
+            if len(chunk) > remaining:
+                stream_exceeded.set()
+                if exceeded is not None:
+                    exceeded.set()
+
+    async def drain_stdout() -> None:
+        await drain(stdout_stream, stdout, stdout_limit, output_exceeded)
+
+    stdout_task = asyncio.create_task(drain_stdout())
+    stderr_task = asyncio.create_task(drain(stderr_stream, stderr, stderr_limit))
+    wait_task = asyncio.create_task(process.wait())
+    exceeded_task = asyncio.create_task(stream_exceeded.wait())
+    try:
+        async with asyncio.timeout(timeout):
+            done, _ = await asyncio.wait(
+                (wait_task, exceeded_task), return_when=asyncio.FIRST_COMPLETED
+            )
+            if exceeded_task in done and not wait_task.done():
+                process.terminate()
+            await wait_task
+    except TimeoutError as exc:
+        if process.returncode is None:
+            process.kill()
+        await wait_task
+        raise subprocess.TimeoutExpired(["git", "-C", cwd, *args], timeout) from exc
+    finally:
+        exceeded_task.cancel()
+        if process.returncode is None:
+            process.kill()
+        await wait_task
+        await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
+
+    return (
+        stdout.decode("utf-8", errors="replace"),
+        stderr.decode("utf-8", errors="replace"),
+        process.returncode or 0,
+        output_exceeded.is_set(),
+    )
+
+
 def _untracked_diff(root: Path, paths: list[str]) -> str:
     chunks: list[str] = []
+    size = 0
     for path in paths:
-        file_path = root / path
+        if size > _MAX_GIT_DIFF_CHARS:
+            break
         try:
+            file_path = _safe_resolve(root, path)
             if (
                 not file_path.is_file()
                 or file_path.stat().st_size > _MAX_UNTRACKED_DIFF_BYTES
@@ -634,14 +712,16 @@ def _untracked_diff(root: Path, paths: list[str]) -> str:
                     "new file mode 100644\n"
                     f"Binary or large file not shown: {path}\n"
                 )
+                size += len(chunks[-1])
                 continue
             lines = file_path.read_text(encoding="utf-8").splitlines(keepends=True)
-        except (OSError, UnicodeDecodeError):
+        except (OSError, UnicodeDecodeError, HTTPException):
             chunks.append(
                 f"\ndiff --git a/{path} b/{path}\n"
                 "new file mode 100644\n"
                 f"Binary or unreadable file not shown: {path}\n"
             )
+            size += len(chunks[-1])
             continue
 
         body = "".join(
@@ -653,7 +733,9 @@ def _untracked_diff(root: Path, paths: list[str]) -> str:
             )
         )
         chunks.append(f"\ndiff --git a/{path} b/{path}\nnew file mode 100644\n{body}")
-    return "".join(chunks)
+        size += len(chunks[-1])
+    # One extra character preserves the caller's truncation signal.
+    return "".join(chunks)[: _MAX_GIT_DIFF_CHARS + 1]
 
 
 async def _run_git(cwd: str, *args: str, timeout: float = 5.0) -> str | None:
@@ -675,18 +757,38 @@ async def _run_git(cwd: str, *args: str, timeout: float = 5.0) -> str | None:
     return str(result.stdout)
 
 
-def _parse_porcelain_v2(stdout: str) -> tuple[str | None, dict[str, int]]:
+def _parse_porcelain_v2(
+    stdout: str,
+) -> tuple[str | None, dict[str, int], str | None, int | None, int | None]:
     """Parse ``git status --porcelain=v2 --branch`` output.
 
-    Returns ``(branch, counts)`` where ``counts`` has keys ``staged``,
-    ``unstaged``, ``untracked``. ``branch`` is ``None`` for detached HEAD.
+    Returns the branch, dirty counts, upstream, and ahead/behind counts.
+    ``branch`` is ``None`` for detached HEAD. Upstream divergence is emitted
+    by the same porcelain invocation when an upstream is configured.
     """
     branch: str | None = None
     staged = unstaged = untracked = 0
+    upstream: str | None = None
+    commits_ahead: int | None = None
+    commits_behind: int | None = None
     for line in stdout.splitlines():
         if line.startswith("# branch.head "):
             head = line[len("# branch.head ") :].strip()
             branch = None if head == "(detached)" else head
+        elif line.startswith("# branch.upstream "):
+            upstream = line[len("# branch.upstream ") :].strip() or None
+        elif line.startswith("# branch.ab "):
+            parts = line.split()
+            if (
+                len(parts) == 4
+                and parts[2].startswith("+")
+                and parts[3].startswith("-")
+            ):
+                try:
+                    commits_ahead = int(parts[2][1:])
+                    commits_behind = int(parts[3][1:])
+                except ValueError:
+                    commits_ahead = commits_behind = None
         elif line.startswith(("1 ", "2 ")):
             # XY status code in field 2 (e.g. "M.", ".M", "MM")
             parts = line.split(" ", 2)
@@ -697,7 +799,13 @@ def _parse_porcelain_v2(stdout: str) -> tuple[str | None, dict[str, int]]:
                     unstaged += 1
         elif line.startswith("? "):
             untracked += 1
-    return branch, {"staged": staged, "unstaged": unstaged, "untracked": untracked}
+    return (
+        branch,
+        {"staged": staged, "unstaged": unstaged, "untracked": untracked},
+        upstream,
+        commits_ahead,
+        commits_behind,
+    )
 
 
 @router.get("/workspace/status")
@@ -729,7 +837,9 @@ async def get_coding_workspace_status(
         return CodingWorkspaceStatusResponse(
             workspace=resolved, name=name, is_git_repo=False
         )
-    branch, counts = _parse_porcelain_v2(status_out)
+    branch, counts, upstream, commits_ahead, commits_behind = _parse_porcelain_v2(
+        status_out
+    )
 
     head: dict | None = None
     log_out = await _run_git(resolved, "log", "-1", "--format=%h%x00%s%x00%ct")
@@ -748,57 +858,62 @@ async def get_coding_workspace_status(
     dirty_model = CodingWorkspaceStatusDirty(**counts) if counts else None
     head_model = CodingWorkspaceStatusHead(**head) if head else None
 
-    # Count local/remote divergence from tracking branch (@{u}) or fallback origin branch.
-    commits_ahead: int | None = None
-    commits_behind: int | None = None
-    upstream: str | None = None
-
-    upstream_ref: str | None = "@{u}"
-    ahead_out = await _run_git(
-        resolved, "rev-list", "--count", "HEAD", f"^{upstream_ref}"
-    )
-
-    if ahead_out is None:
-        # @{u} failed (e.g. no tracking branch configured for a newly created branch like branch-A).
-        # Fallback to candidate origin references: origin/<branch>, origin/HEAD, origin/main, origin/master, main, master.
-        candidates: list[str] = []
-        if branch:
-            candidates.append(f"origin/{branch}")
-        candidates.extend(
-            ["origin/HEAD", "origin/main", "origin/master", "main", "master"]
+    # Porcelain v2 reports the configured upstream and divergence in the status
+    # result above. Reuse it instead of adding three more subprocesses. Older
+    # Git versions and branches without an upstream still use the fallback.
+    if upstream is None or commits_ahead is None or commits_behind is None:
+        upstream_ref: str | None = "@{u}"
+        divergence_out = await _run_git(
+            resolved, "rev-list", "--left-right", "--count", f"HEAD...{upstream_ref}"
         )
+        if divergence_out is not None:
+            parsed_counts = divergence_out.split()
+            if len(parsed_counts) == 2 and all(
+                count.isdigit() for count in parsed_counts
+            ):
+                commits_ahead, commits_behind = map(int, parsed_counts)
 
-        upstream_ref = None
-        for candidate in candidates:
-            # Skip comparing local branch against itself when no remote origin exists
-            if branch and candidate == branch:
-                continue
-            if await _run_git(resolved, "rev-parse", "--verify", candidate) is not None:
-                upstream_ref = candidate
-                ahead_out = await _run_git(
-                    resolved, "rev-list", "--count", "HEAD", f"^{upstream_ref}"
-                )
-                if ahead_out is not None:
-                    break
+        if divergence_out is None:
+            # @{u} failed (e.g. no tracking branch configured for a newly created branch like branch-A).
+            # Fallback to candidate origin references: origin/<branch>, origin/HEAD, origin/main, origin/master, main, master.
+            candidates: list[str] = []
+            if branch:
+                candidates.append(f"origin/{branch}")
+            candidates.extend(
+                ["origin/HEAD", "origin/main", "origin/master", "main", "master"]
+            )
 
-    if upstream_ref and ahead_out is not None:
-        stripped = ahead_out.strip()
-        if stripped.isdigit():
-            commits_ahead = int(stripped)
+            upstream_ref = None
+            for candidate in candidates:
+                # Skip comparing local branch against itself when no remote origin exists.
+                if branch and candidate == branch:
+                    continue
+                if (
+                    await _run_git(resolved, "rev-parse", "--verify", candidate)
+                    is not None
+                ):
+                    candidate_counts = await _run_git(
+                        resolved,
+                        "rev-list",
+                        "--left-right",
+                        "--count",
+                        f"HEAD...{candidate}",
+                    )
+                    if candidate_counts is not None:
+                        parsed_counts = candidate_counts.split()
+                        if len(parsed_counts) == 2 and all(
+                            count.isdigit() for count in parsed_counts
+                        ):
+                            commits_ahead, commits_behind = map(int, parsed_counts)
+                            upstream_ref = candidate
+                            break
 
-        behind_out = await _run_git(
-            resolved, "rev-list", "--count", upstream_ref, "^HEAD"
-        )
-        if behind_out is not None:
-            behind_stripped = behind_out.strip()
-            if behind_stripped.isdigit():
-                commits_behind = int(behind_stripped)
-
-        if upstream_ref == "@{u}":
-            abbrev = await _run_git(resolved, "rev-parse", "--abbrev-ref", "@{u}")
-            upstream = abbrev.strip() if abbrev else "@{u}"
-        else:
-            upstream = upstream_ref
+        if upstream_ref and commits_ahead is not None and commits_behind is not None:
+            if upstream_ref == "@{u}":
+                abbrev = await _run_git(resolved, "rev-parse", "--abbrev-ref", "@{u}")
+                upstream = abbrev.strip() if abbrev else "@{u}"
+            else:
+                upstream = upstream_ref
 
     return CodingWorkspaceStatusResponse(
         workspace=resolved,
@@ -826,7 +941,13 @@ async def get_coding_workspace_git_history(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    if cursor and not re.match(r"^[a-fA-F0-9]{4,64}$", cursor):
+    offset_cursor = re.fullmatch(r"all:([0-9]{1,9})", cursor or "")
+    offset = int(offset_cursor[1]) if offset_cursor else 0
+    if (
+        cursor
+        and not (all_branches and offset_cursor)
+        and not re.fullmatch(r"[a-fA-F0-9]{4,64}", cursor)
+    ):
         raise HTTPException(status_code=422, detail="Invalid cursor SHA format.")
 
     root = Path(resolved)
@@ -845,7 +966,9 @@ async def get_coding_workspace_git_history(
     #    the ASCII Record Separator (\x1e) so that multi-line body text doesn't
     #    break parsing.
     log_args = ["log"]
-    if cursor:
+    if offset_cursor:
+        log_args.append(f"--skip={offset}")
+    elif cursor:
         log_args.extend([cursor, "--skip=1"])
     log_args.extend(
         [
@@ -896,7 +1019,11 @@ async def get_coding_workspace_git_history(
     # 2. Determine next_cursor and slice
     next_cursor = None
     if len(commits) > limit:
-        next_cursor = commits[limit].sha
+        # A SHA only anchors its own ancestry; --all adds every ref again.
+        # Use an explicit traversal offset for all-branch pages instead.
+        next_cursor = (
+            f"all:{offset + limit}" if all_branches else commits[limit - 1].sha
+        )
         commits = commits[:limit]
 
     # 3. Fetch git log graph
@@ -909,6 +1036,10 @@ async def get_coding_workspace_git_history(
         "-n",
         str(limit),
     ]
+    if offset_cursor:
+        graph_args.append(f"--skip={offset}")
+    elif cursor:
+        graph_args.extend([cursor, "--skip=1"])
     if all_branches:
         graph_args.extend(["--exclude=refs/stash", "--all"])
 
