@@ -16,7 +16,7 @@ function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
         // Placeholder
         "placeholder:text-(--color-text-muted)",
         // Interaction — no hover border jump
-        "outline-none transition-colors",
+        "outline-none transition-colors focus:outline-none focus-visible:outline-none",
         "focus-visible:border-(--focus-ring) focus-visible:ring-2 focus-visible:ring-(--focus-ring)/30",
         // States
         "disabled:cursor-not-allowed disabled:opacity-50",

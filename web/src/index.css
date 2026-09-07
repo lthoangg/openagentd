@@ -1047,9 +1047,13 @@ html[data-app-hidden="true"] *::after {
 :root.dark {
   --focus-outline: #9DD0F5;
 }
-:where(button, input, textarea, select, a[href], [tabindex]):focus-visible {
+:where(button, select, a[href], [tabindex]):focus-visible {
   outline: 2px solid var(--focus-outline);
   outline-offset: 2px;
+}
+:where(input, textarea):focus,
+:where(input, textarea):focus-visible {
+  outline: none;
 }
 @media (pointer: coarse) {
   [data-slot="button"] {

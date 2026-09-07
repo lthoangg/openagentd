@@ -776,7 +776,7 @@ export const InputComposer = forwardRef<InputComposerHandle, InputComposerProps>
         // further with every scroll. The wrapper around the overlay handles
         // overflow via the overlay's ``overflow-hidden`` + scroll sync.
         className={cn(
-          'block w-full resize-none scrollbar-none overscroll-contain bg-transparent p-0 align-middle text-sm leading-relaxed break-words caret-(--color-text) placeholder-(--color-text-subtle) selection:bg-(--color-accent)/30 selection:text-(--color-text) focus:outline-none disabled:opacity-50',
+          'block w-full resize-none scrollbar-none overscroll-contain bg-transparent p-0 align-middle text-sm leading-relaxed break-words caret-(--color-text) placeholder-(--color-text-subtle) selection:bg-(--color-accent)/30 selection:text-(--color-text) outline-none focus:outline-none focus-visible:outline-none disabled:opacity-50',
           isComposing ? 'text-(--color-text)' : 'text-transparent',
         )}
         // Cap matches the ``resize()`` ceiling in InputComposer.autosize.ts so the

@@ -27,7 +27,7 @@ function Input({ className, ref, ...props }: InputProps) {
         // Placeholder
         'placeholder:text-(--color-text-muted)',
         // Interaction
-        'outline-none transition-colors',
+        'outline-none transition-colors focus:outline-none focus-visible:outline-none',
         'focus:border-(--focus-ring) focus:ring-2 focus:ring-(--focus-ring)/30',
         // States
         'disabled:cursor-not-allowed disabled:opacity-50',
