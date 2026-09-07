@@ -206,10 +206,10 @@ async def test_install_typescript_verifies_bun_and_disables_package_scripts(
     assert "--ignore-scripts" in argv
     assert "--frozen-lockfile" in argv
     assert (
-        "typescript-language-server@5.3.0"
+        "typescript-language-server@6.0.0"
         in (tools.packages_dir / "bun.lock").read_text()
     )
-    assert '"typescript": "6.0.3"' in (tools.packages_dir / "package.json").read_text()
+    assert '"typescript": "7.0.2"' in (tools.packages_dir / "package.json").read_text()
 
 
 @pytest.mark.asyncio
