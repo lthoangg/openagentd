@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import zipfile
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -55,6 +56,27 @@ def test_managed_typescript_manifest_matches_runtime_versions():
         "typescript": TYPESCRIPT_VERSION,
         "typescript-language-server": TYPESCRIPT_LANGUAGE_SERVER_VERSION,
     }
+
+
+def test_managed_typescript_package_provides_tsserver():
+    lockfile_path = (
+        Path(__file__).parents[2]
+        / "app"
+        / "services"
+        / "lsp"
+        / "resources"
+        / "bun.lock"
+    )
+    raw = lockfile_path.read_text()
+    cleaned = re.sub(r",(\s*[}\]])", r"\1", raw)
+    lock_data = json.loads(cleaned)
+    ts_entry = lock_data.get("packages", {}).get("typescript")
+    assert ts_entry is not None, "typescript package missing from bun.lock"
+    meta = ts_entry[2] if len(ts_entry) > 2 and isinstance(ts_entry[2], dict) else {}
+    bins = meta.get("bin", {})
+    assert "tsserver" in bins, (
+        "Managed typescript package must provide tsserver executable"
+    )
 
 
 def test_managed_bun_uses_musl_build_on_alpine(tmp_path, monkeypatch):
@@ -209,7 +231,53 @@ async def test_install_typescript_verifies_bun_and_disables_package_scripts(
         "typescript-language-server@6.0.0"
         in (tools.packages_dir / "bun.lock").read_text()
     )
-    assert '"typescript": "7.0.2"' in (tools.packages_dir / "package.json").read_text()
+    assert '"typescript": "6.0.3"' in (tools.packages_dir / "package.json").read_text()
+
+
+@pytest.mark.asyncio
+async def test_install_typescript_fails_when_tsserver_missing(tmp_path, monkeypatch):
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr("bun-linux-x64/bun", b"managed-bun")
+    payload = archive.getvalue()
+    asset = BunAsset(
+        filename="bun-linux-x64.zip",
+        url="https://example.invalid/bun.zip",
+        sha256=hashlib.sha256(payload).hexdigest(),
+        executable_member="bun-linux-x64/bun",
+    )
+    tools = ManagedLspTools(root=tmp_path / "managed")
+
+    async def fake_download(url: str) -> bytes:
+        assert url == asset.url
+        return payload
+
+    process = AsyncMock()
+
+    async def finish_install_without_tsserver():
+        tools.typescript_language_server_path.parent.mkdir(parents=True)
+        tools.typescript_language_server_path.write_text("// cli")
+        # deliberately omit tools.managed_tsserver_path
+        return b"", b""
+
+    process.communicate.side_effect = finish_install_without_tsserver
+    process.returncode = 0
+    create_process = AsyncMock(return_value=process)
+    monkeypatch.setattr(tools, "_asset", lambda: asset)
+    monkeypatch.setattr(tools, "_download", fake_download)
+    monkeypatch.setattr(
+        "app.services.lsp.managed.asyncio.create_subprocess_exec", create_process
+    )
+
+    with pytest.raises(
+        RuntimeError, match="TypeScript language-server installation is incomplete"
+    ):
+        await tools.install_typescript()
+
+    assert tools.status().state == "error"
+    assert tools.status().detail == (
+        "TypeScript component installation failed; see backend logs."
+    )
 
 
 @pytest.mark.asyncio
