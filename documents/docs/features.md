@@ -51,13 +51,13 @@ The product's primary coding surface. A native double-click app on macOS, Window
 and Linux that hosts the same FastAPI sidecar + React UI you would otherwise
 run from the terminal.
 
-- **Settings draft protection and mobile navigation** `[v2.10.0]` — unsaved
+- **Settings draft protection and mobile navigation** `[v2.11.0]` — unsaved
   drafts survive remote refreshes and edits made during a save. Shared settings
   pages and source editors ask before discarding changes on internal navigation
   or close. Mobile exposes every settings category in a grouped section picker.
   Nested confirmation dialogs keep keyboard focus and Escape handling in the
   innermost dialog; shared tabs support arrow keys and Home/End.
-- **Reliable Git history paging** `[v2.10.0]` — commit and graph pages advance
+- **Reliable Git history paging** `[v2.11.0]` — commit and graph pages advance
   together in single-branch and all-branch views. Commit lists provide an
   explicit Load more action and a retry action for failed history requests.
 - **Native desktop app for macOS, Windows, Linux** `[since v1.0; Windows restored v1.106.0]` — Tauri 2 shell,
@@ -963,7 +963,7 @@ MCP.
 
 Four orthogonal ways to add capability.
 
-- **MCP servers** `[since v1.0; v2.10.0]` — any Model Context Protocol server,
+- **MCP servers** `[since v1.0; v2.11.0]` — any Model Context Protocol server,
   hot-reloaded via `POST /api/mcp/apply`. A configured server is automatically
   available to the coding agent; agent Markdown no longer needs a per-agent MCP
   selection. OAuth-backed setup. Session Settings shows every configured server
