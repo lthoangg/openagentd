@@ -402,6 +402,108 @@ async def test_list_skills_labels_project_opencode_source(
 
 
 @pytest.mark.asyncio
+async def test_list_skills_labels_project_agents_source(
+    client, fs_dirs, tmp_path, monkeypatch
+):
+    workspace = tmp_path / "workspace"
+    project_skills = workspace / ".agents" / "skills"
+    skill_file = project_skills / "research" / "SKILL.md"
+    skill_file.parent.mkdir(parents=True)
+    skill_file.write_text(VALID_SKILL)
+    openagentd_skills = fs_dirs[1]
+
+    from app.agent.tools.builtin import skill as skill_module
+
+    monkeypatch.setattr(
+        skill_module, "_iter_skill_roots", lambda: [project_skills, openagentd_skills]
+    )
+    monkeypatch.setattr(skill_module, "_project_root", lambda: workspace)
+    skill_module._discover_skills_cached.cache_clear()
+
+    resp = await client.get("/api/skills")
+
+    assert resp.status_code == 200
+    assert resp.json()["skills"][0]["source"] == "project-agents"
+
+
+@pytest.mark.asyncio
+async def test_list_skills_labels_global_agents_source(
+    client, fs_dirs, tmp_path, monkeypatch
+):
+    openagentd_skills = fs_dirs[1]
+    agents_global = tmp_path / "home" / ".agents" / "skills"
+    skill_file = agents_global / "research" / "SKILL.md"
+    skill_file.parent.mkdir(parents=True)
+    skill_file.write_text(VALID_SKILL)
+
+    from app.agent.tools.builtin import skill as skill_module
+
+    monkeypatch.setattr(
+        skill_module, "_iter_skill_roots", lambda: [openagentd_skills, agents_global]
+    )
+    monkeypatch.setattr(
+        skills_routes.Path, "home", classmethod(lambda cls: tmp_path / "home")
+    )
+    skill_module._discover_skills_cached.cache_clear()
+
+    resp = await client.get("/api/skills")
+
+    assert resp.status_code == 200
+    assert resp.json()["skills"][0]["source"] == "global-agents"
+
+
+@pytest.mark.asyncio
+async def test_delete_project_agents_skill_removes_source_file(
+    client, fs_dirs, tmp_path, monkeypatch
+):
+    workspace = tmp_path / "workspace"
+    project_skills = workspace / ".agents" / "skills"
+    skill_file = project_skills / "research" / "SKILL.md"
+    skill_file.parent.mkdir(parents=True)
+    skill_file.write_text(VALID_SKILL)
+    openagentd_skills = fs_dirs[1]
+
+    from app.agent.tools.builtin import skill as skill_module
+
+    monkeypatch.setattr(
+        skill_module, "_iter_skill_roots", lambda: [project_skills, openagentd_skills]
+    )
+    monkeypatch.setattr(skill_module, "_project_root", lambda: workspace)
+    skill_module._discover_skills_cached.cache_clear()
+
+    resp = await client.delete("/api/skills/research")
+
+    assert resp.status_code == 200
+    assert not skill_file.exists()
+
+
+@pytest.mark.asyncio
+async def test_delete_global_agents_skill_removes_source_file(
+    client, fs_dirs, tmp_path, monkeypatch
+):
+    openagentd_skills = fs_dirs[1]
+    agents_global = tmp_path / "home" / ".agents" / "skills"
+    skill_file = agents_global / "research" / "SKILL.md"
+    skill_file.parent.mkdir(parents=True)
+    skill_file.write_text(VALID_SKILL)
+
+    from app.agent.tools.builtin import skill as skill_module
+
+    monkeypatch.setattr(
+        skill_module, "_iter_skill_roots", lambda: [openagentd_skills, agents_global]
+    )
+    monkeypatch.setattr(
+        skills_routes.Path, "home", classmethod(lambda cls: tmp_path / "home")
+    )
+    skill_module._discover_skills_cached.cache_clear()
+
+    resp = await client.delete("/api/skills/research")
+
+    assert resp.status_code == 200
+    assert not skill_file.exists()
+
+
+@pytest.mark.asyncio
 async def test_delete_opencode_skill_removes_source_file(
     client, fs_dirs, tmp_path, monkeypatch
 ):

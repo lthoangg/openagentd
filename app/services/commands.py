@@ -16,10 +16,13 @@ name collision, later sources are silently ignored:
 
     1. ``{workspace}/.openagentd/commands/``  (project, OpenAgentd-native;
                                                coding mode only)
-    2. ``{workspace}/.opencode/commands/``    (project, opencode reuse;
+    2. ``{workspace}/.agents/commands/``      (project, universal .agents;
                                                coding mode only)
-    3. ``{OPENAGENTD_CONFIG_DIR}/commands/``     (global, OpenAgentd)
-    4. ``~/.config/opencode/commands/`` (global, opencode reuse)
+    3. ``{workspace}/.opencode/commands/``    (project, opencode reuse;
+                                               coding mode only)
+    4. ``{OPENAGENTD_CONFIG_DIR}/commands/``  (global, OpenAgentd)
+    5. ``~/.agents/commands/``                (global, universal .agents)
+    6. ``~/.config/opencode/commands/``       (global, opencode reuse)
 
 Nested folders are honoured: ``commands/git/commit.md`` registers as
 ``git/commit`` so users can group related commands. The forward slash
@@ -46,7 +49,7 @@ class Command:
     description: str
     body: str  # post-frontmatter markdown, untouched
     path: Path  # absolute path to the source .md file
-    source: str  # one of: project-openagentd / project-opencode / global-openagentd / global-opencode
+    source: str  # one of: project-openagentd / project-agents / project-opencode / global-openagentd / global-agents / global-opencode
 
 
 # ── Discovery roots ─────────────────────────────────────────────────────────
@@ -66,12 +69,14 @@ def _candidate_roots(workspace: Path | None = None) -> list[tuple[Path, str]]:
         roots.extend(
             [
                 (workspace / ".openagentd" / "commands", "project-openagentd"),
+                (workspace / ".agents" / "commands", "project-agents"),
                 (workspace / ".opencode" / "commands", "project-opencode"),
             ]
         )
     roots.extend(
         [
             (config / "commands", "global-openagentd"),
+            (home / ".agents" / "commands", "global-agents"),
             (home / ".config" / "opencode" / "commands", "global-opencode"),
         ]
     )
@@ -436,6 +441,8 @@ GEMINI.md
 .cursor/rules/
 .cursor/rules/*.mdc
 .windsurfrules
+.agents/rules/
+.agents/rules/*.md
 ```
 
 Do not automatically copy those files into `AGENTS.md`.

@@ -82,6 +82,22 @@ def test_global_instructions_path_lives_in_the_config_dir(monkeypatch, tmp_path)
     assert global_instructions_path() == tmp_path / "cfg" / "AGENTS.md"
 
 
+def test_global_instructions_path_falls_back_to_home_dot_agents(monkeypatch, tmp_path):
+    from app.core import config as config_module
+
+    cfg_dir = tmp_path / "cfg"
+    cfg_dir.mkdir()
+    home_dir = tmp_path / "home"
+    home_agents = home_dir / ".agents"
+    home_agents.mkdir(parents=True)
+    (home_agents / "AGENTS.md").write_text("Universal global rule.", encoding="utf-8")
+
+    monkeypatch.setattr(config_module.settings, "OPENAGENTD_CONFIG_DIR", str(cfg_dir))
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home_dir))
+
+    assert global_instructions_path() == home_agents / "AGENTS.md"
+
+
 @pytest.mark.asyncio
 async def test_workspace_instructions_hook_injects_agents_md(tmp_path):
     (tmp_path / "AGENTS.md").write_text("Follow project rules.", encoding="utf-8")
@@ -102,6 +118,34 @@ async def test_workspace_instructions_hook_injects_agents_md(tmp_path):
 
     assert "Base prompt" in seen["prompt"]
     assert "Follow project rules." in seen["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_workspace_instructions_hook_injects_dot_agents_md(tmp_path):
+    agents_dir = tmp_path / ".agents"
+    agents_dir.mkdir()
+    (agents_dir / "AGENTS.md").write_text(
+        "Universal agents instructions.", encoding="utf-8"
+    )
+    hook = WorkspaceInstructionsHook(str(tmp_path))
+    prompt = await _capture(hook)
+
+    assert "Universal agents instructions." in prompt
+
+
+@pytest.mark.asyncio
+async def test_workspace_instructions_hook_prefers_root_agents_md_over_dot_agents(
+    tmp_path,
+):
+    (tmp_path / "AGENTS.md").write_text("Root instructions.", encoding="utf-8")
+    agents_dir = tmp_path / ".agents"
+    agents_dir.mkdir()
+    (agents_dir / "AGENTS.md").write_text("Universal instructions.", encoding="utf-8")
+    hook = WorkspaceInstructionsHook(str(tmp_path))
+    prompt = await _capture(hook)
+
+    assert "Root instructions." in prompt
+    assert "Universal instructions." not in prompt
 
 
 @pytest.mark.asyncio

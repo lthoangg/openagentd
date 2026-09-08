@@ -46,7 +46,9 @@ def roots(tmp_path: Path, monkeypatch):
         "home",
         classmethod(lambda cls: tmp_path / "home"),
     )
-    return cwd, proj_oad, proj_oc, global_oad, global_oc
+    proj_agents = cwd / ".agents" / "commands"
+    global_agents = tmp_path / "home" / ".agents" / "commands"
+    return cwd, proj_oad, proj_agents, proj_oc, global_oad, global_agents, global_oc
 
 
 def _write(path: Path, content: str) -> None:
@@ -80,26 +82,34 @@ def test_discover_returns_empty_when_no_roots(roots):
 
 
 def test_discover_finds_command_in_each_root(roots):
-    cwd, proj_oad, proj_oc, global_oad, global_oc = roots
+    cwd, proj_oad, proj_agents, proj_oc, global_oad, global_agents, global_oc = roots
     _write(proj_oad / "a.md", VALID)
-    _write(proj_oc / "b.md", VALID)
-    _write(global_oad / "c.md", VALID)
-    _write(global_oc / "d.md", VALID)
+    _write(proj_agents / "b.md", VALID)
+    _write(proj_oc / "c.md", VALID)
+    _write(global_oad / "d.md", VALID)
+    _write(global_agents / "e.md", VALID)
+    _write(global_oc / "f.md", VALID)
 
     result = discover_commands(workspace=cwd)
 
-    assert set(result.keys()) == {"a", "b", "c", "d"}
+    assert set(result.keys()) == {"a", "b", "c", "d", "e", "f"}
     assert result["a"].source == "project-openagentd"
-    assert result["b"].source == "project-opencode"
-    assert result["c"].source == "global-openagentd"
-    assert result["d"].source == "global-opencode"
+    assert result["b"].source == "project-agents"
+    assert result["c"].source == "project-opencode"
+    assert result["d"].source == "global-openagentd"
+    assert result["e"].source == "global-agents"
+    assert result["f"].source == "global-opencode"
 
 
 def test_precedence_project_openagentd_wins_over_global(roots):
-    cwd, proj_oad, proj_oc, global_oad, global_oc = roots
+    cwd, proj_oad, proj_agents, proj_oc, global_oad, global_agents, global_oc = roots
     _write(
         proj_oad / "commit.md",
         "---\ndescription: project-oad\n---\nproject-oad body\n",
+    )
+    _write(
+        proj_agents / "commit.md",
+        "---\ndescription: project-agents\n---\nproject-agents body\n",
     )
     _write(
         proj_oc / "commit.md",
@@ -108,6 +118,10 @@ def test_precedence_project_openagentd_wins_over_global(roots):
     _write(
         global_oad / "commit.md",
         "---\ndescription: global-oad\n---\nglobal-oad body\n",
+    )
+    _write(
+        global_agents / "commit.md",
+        "---\ndescription: global-agents\n---\nglobal-agents body\n",
     )
     _write(
         global_oc / "commit.md",
@@ -119,6 +133,54 @@ def test_precedence_project_openagentd_wins_over_global(roots):
     assert result["commit"].source == "project-openagentd"
     assert result["commit"].description == "project-oad"
     assert "project-oad body" in result["commit"].body
+
+
+def test_precedence_project_agents_wins_over_opencode_and_global(roots):
+    cwd, _proj_oad, proj_agents, proj_oc, global_oad, global_agents, global_oc = roots
+    _write(
+        proj_agents / "commit.md",
+        "---\ndescription: project-agents\n---\nproject-agents body\n",
+    )
+    _write(
+        proj_oc / "commit.md",
+        "---\ndescription: project-oc\n---\nproject-oc body\n",
+    )
+    _write(
+        global_oad / "commit.md",
+        "---\ndescription: global-oad\n---\nglobal-oad body\n",
+    )
+    _write(
+        global_agents / "commit.md",
+        "---\ndescription: global-agents\n---\nglobal-agents body\n",
+    )
+    _write(
+        global_oc / "commit.md",
+        "---\ndescription: global-oc\n---\nglobal-oc body\n",
+    )
+
+    result = discover_commands(workspace=cwd)
+
+    assert result["commit"].source == "project-agents"
+    assert result["commit"].description == "project-agents"
+
+
+def test_precedence_global_agents_wins_over_global_opencode(roots):
+    cwd, _proj_oad, _proj_agents, _proj_oc, _global_oad, global_agents, global_oc = (
+        roots
+    )
+    _write(
+        global_agents / "commit.md",
+        "---\ndescription: global-agents\n---\nglobal-agents body\n",
+    )
+    _write(
+        global_oc / "commit.md",
+        "---\ndescription: global-oc\n---\nglobal-oc body\n",
+    )
+
+    result = discover_commands(workspace=cwd)
+
+    assert result["commit"].source == "global-agents"
+    assert result["commit"].description == "global-agents"
 
 
 def test_nested_folders_become_slashed_names(roots):
@@ -258,7 +320,9 @@ def test_discover_invalidates_atomic_replacement_with_matching_mtime(
 
 
 def test_discover_reflects_create_delete_rename_and_precedence(roots):
-    cwd, proj_oad, _, global_oad, _ = roots
+    cwd, proj_oad, _proj_agents, _proj_oc, global_oad, _global_agents, _global_oc = (
+        roots
+    )
     global_command = global_oad / "commit.md"
     project_command = proj_oad / "commit.md"
     _write(global_command, "---\ndescription: global\n---\nglobal\n")

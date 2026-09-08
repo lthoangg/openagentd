@@ -10,8 +10,8 @@ class CommandSummary(BaseModel):
     description: str = ""
     source: str = Field(
         description=(
-            "Origin root: project-openagentd / project-opencode / "
-            "global-openagentd / global-opencode."
+            "Origin root: project-openagentd / project-agents / project-opencode / "
+            "global-openagentd / global-agents / global-opencode."
         ),
     )
 

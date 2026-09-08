@@ -62,11 +62,13 @@ def _iter_skill_roots() -> list[Path]:
     works in both tools:
 
     1. ``{workspace}/.openagentd/skills/``  (project, OpenAgentd-native)
-    2. ``{workspace}/.opencode/skills/``    (project, opencode reuse)
-    3. ``_SKILLS_DIR``                     (global, OpenAgentd — typically
+    2. ``{workspace}/.agents/skills/``      (project, universal .agents)
+    3. ``{workspace}/.opencode/skills/``    (project, opencode reuse)
+    4. ``_SKILLS_DIR``                     (global, OpenAgentd — typically
                                              ``{OPENAGENTD_CONFIG_DIR}/skills``)
-    4. ``~/.config/opencode/skills/``      (global, opencode reuse)
-    5. bundled OpenAgentd skills           (read-only fallback)
+    5. ``~/.agents/skills/``               (global, universal .agents)
+    6. ``~/.config/opencode/skills/``      (global, opencode reuse)
+    7. bundled OpenAgentd skills           (read-only fallback)
 
     Earlier entries win on a name collision. ``_SKILLS_DIR`` is
     referenced indirectly (via the module-level binding) so existing
@@ -75,8 +77,10 @@ def _iter_skill_roots() -> list[Path]:
     project_root = _project_root()
     return [
         project_root / ".openagentd" / "skills",
+        project_root / ".agents" / "skills",
         project_root / ".opencode" / "skills",
         _SKILLS_DIR,
+        Path.home() / ".agents" / "skills",
         Path.home() / ".config" / "opencode" / "skills",
         _builtin_skills_dir(),
     ]
@@ -116,6 +120,7 @@ def _render_tokens(text: str, *, skill_dir: Path | None = None) -> str:
         if workspace is not None:
             project_roots = [
                 (workspace / ".openagentd" / "skills").resolve(),
+                (workspace / ".agents" / "skills").resolve(),
                 (workspace / ".opencode" / "skills").resolve(),
             ]
             is_project_skill = any(

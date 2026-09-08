@@ -11,8 +11,10 @@ Snippets are markdown files with optional YAML frontmatter:
 Discovery walks OpenAgentd-native snippet roots in precedence order — first hit
 wins on a name collision:
 
-    1. ``{workspace}/.openagentd/snippets/``      (project; coding mode only)
-    2. ``{OPENAGENTD_CONFIG_DIR}/snippets/``      (global)
+    1. ``{workspace}/.openagentd/snippets/``      (project, OpenAgentd-native; coding mode only)
+    2. ``{workspace}/.agents/snippets/``          (project, universal .agents; coding mode only)
+    3. ``{OPENAGENTD_CONFIG_DIR}/snippets/``      (global, OpenAgentd)
+    4. ``~/.agents/snippets/``                    (global, universal .agents)
 
 Nested folders are honoured one level deep: ``snippets/git/commit.md`` registers
 as ``git/commit``.
@@ -35,14 +37,17 @@ class Snippet:
     description: str
     body: str
     path: Path
-    source: str  # one of: project-openagentd / global-openagentd
+    source: str  # one of: project-openagentd / project-agents / global-openagentd / global-agents
 
 
 def _candidate_roots(workspace: Path) -> list[tuple[Path, str]]:
+    home = Path.home()
     config = Path(settings.OPENAGENTD_CONFIG_DIR)
     return [
         (workspace / ".openagentd" / "snippets", "project-openagentd"),
+        (workspace / ".agents" / "snippets", "project-agents"),
         (config / "snippets", "global-openagentd"),
+        (home / ".agents" / "snippets", "global-agents"),
     ]
 
 

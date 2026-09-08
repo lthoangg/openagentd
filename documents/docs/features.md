@@ -566,12 +566,12 @@ agent against it.
   workspace doesn't crowd the others.
 - **`@file` / `@folder` auto-attach** `[v1.17.0]` — see [§1](#1-the-desktop-coding-workspace).
 - **Slash commands scoped to coding workspaces** `[v1.17.0]` — project-local
-  commands in `.openagentd/commands/**/*.md` and `.opencode/commands/**/*.md`
+  commands in `.openagentd/commands/**/*.md`, universal `.agents/commands/**/*.md` `[v2.11.1]`, and `.opencode/commands/**/*.md`
   load only when a workspace is attached. Local commands win on name conflict.
   Coding chat stays global-only.
 - **Snippet picker** `[v1.31.0]` — in coding workspaces, type `#` anywhere
   in the composer to pick prompt snippets from `.openagentd/snippets/**/*.md`
-  or `{OPENAGENTD_CONFIG_DIR}/snippets/**/*.md` and insert the rendered body.
+  or `{OPENAGENTD_CONFIG_DIR}/snippets/**/*.md` (plus universal `.agents/snippets/**/*.md` and `~/.agents/snippets/**/*.md` `[v2.11.1]`) and insert the rendered body.
 - **Git-backed `/undo` and `/redo`** `[v1.11.0]` — restore workspace files
   (created, modified, deleted) to the exact prior state from any prior turn in
   chat history. Different from editor undo: this is tied to chat turns.
@@ -1013,7 +1013,7 @@ Four orthogonal ways to add capability.
     `load_skill` now always prepends a `Skill directory: <path>` line to its response so the
     agent finds bundled reference files without relying on the author adding `{SKILL_DIR}`
     tokens `[v1.92.0]`. Skill cache invalidation now also watches project-local skill roots
-    (`.openagentd/skills/`, `.opencode/skills/`), not just the global config directory, so
+    (`.openagentd/skills/`, `.agents/skills/` `[v2.11.1]`, `.opencode/skills/`), not just the global config directory, so
     edits are picked up on the next `discover_skills()` call `[v1.92.0]`.
   - **Semantic docs search skill experiment** `[v1.98.0]` *(beta)* — project workspaces can ship
     an `oad/search-doc` skill plus a turbovec-based document-search experiment for semantic lookup

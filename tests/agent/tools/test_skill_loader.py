@@ -594,12 +594,21 @@ class TestMultiRootDiscovery:
 
     @pytest.fixture
     def roots(self, tmp_path, monkeypatch):
-        """Patch ``_iter_skill_roots`` to a fresh four-root layout under tmp_path."""
+        """Patch ``_iter_skill_roots`` to a fresh six-root layout under tmp_path."""
         project_oad = tmp_path / "proj" / ".openagentd" / "skills"
+        project_agents = tmp_path / "proj" / ".agents" / "skills"
         project_oc = tmp_path / "proj" / ".opencode" / "skills"
         global_oad = tmp_path / "config" / "skills"
+        global_agents = tmp_path / "home" / ".agents" / "skills"
         global_oc = tmp_path / "home" / ".config" / "opencode" / "skills"
-        ordered = [project_oad, project_oc, global_oad, global_oc]
+        ordered = [
+            project_oad,
+            project_agents,
+            project_oc,
+            global_oad,
+            global_agents,
+            global_oc,
+        ]
         monkeypatch.setattr(
             "app.agent.tools.builtin.skill._iter_skill_roots", lambda: ordered
         )
@@ -613,7 +622,7 @@ class TestMultiRootDiscovery:
         )
 
     def test_opencode_global_skill_discovered(self, roots):
-        _project_oad, _project_oc, _global_oad, global_oc = roots
+        *_, global_oc = roots
         self._write_skill(global_oc, "research", "From opencode", "Body.")
 
         result = discover_skills()
@@ -621,8 +630,46 @@ class TestMultiRootDiscovery:
         assert "research" in result
         assert result["research"]["description"] == "From opencode"
 
+    def test_agents_skills_discovered(self, roots):
+        _proj_oad, project_agents, _proj_oc, _global_oad, global_agents, _global_oc = (
+            roots
+        )
+        self._write_skill(
+            project_agents, "p-skill", "From project .agents", "Project body."
+        )
+        self._write_skill(
+            global_agents, "g-skill", "From global .agents", "Global body."
+        )
+
+        result = discover_skills()
+
+        assert "p-skill" in result
+        assert result["p-skill"]["description"] == "From project .agents"
+        assert "g-skill" in result
+        assert result["g-skill"]["description"] == "From global .agents"
+
+    def test_precedence_project_agents_wins_over_project_opencode(self, roots):
+        _proj_oad, project_agents, project_oc, *rest = roots
+        self._write_skill(project_oc, "research", "opencode", "opencode body")
+        self._write_skill(project_agents, "research", "agents", "agents body")
+
+        result = discover_skills()
+
+        assert result["research"]["description"] == "agents"
+        assert str(project_agents / "research") == result["research"]["dir"]
+
+    def test_precedence_project_openagentd_wins_over_project_agents(self, roots):
+        project_oad, project_agents, *rest = roots
+        self._write_skill(project_agents, "research", "agents", "agents body")
+        self._write_skill(project_oad, "research", "openagentd", "openagentd body")
+
+        result = discover_skills()
+
+        assert result["research"]["description"] == "openagentd"
+        assert str(project_oad / "research") == result["research"]["dir"]
+
     def test_precedence_openagentd_wins_over_opencode_on_collision(self, roots):
-        project_oad, _project_oc, _global_oad, global_oc = roots
+        project_oad, *middle, global_oc = roots
         self._write_skill(global_oc, "research", "opencode", "opencode body")
         self._write_skill(project_oad, "research", "openagentd", "openagentd body")
 
@@ -634,7 +681,14 @@ class TestMultiRootDiscovery:
         assert str(project_oad / "research") == result["research"]["dir"]
 
     def test_local_opencode_skill_wins_over_global_openagentd(self, roots):
-        _project_oad, project_oc, global_oad, _global_oc = roots
+        (
+            _project_oad,
+            _project_agents,
+            project_oc,
+            global_oad,
+            _global_agents,
+            _global_oc,
+        ) = roots
         self._write_skill(global_oad, "research", "global openagentd", "global body")
         self._write_skill(project_oc, "research", "local opencode", "local body")
 
@@ -644,15 +698,31 @@ class TestMultiRootDiscovery:
         assert str(project_oc / "research") == result["research"]["dir"]
 
     def test_skills_from_all_roots_merged(self, roots):
-        project_oad, project_oc, global_oad, global_oc = roots
+        (
+            project_oad,
+            project_agents,
+            project_oc,
+            global_oad,
+            global_agents,
+            global_oc,
+        ) = roots
         self._write_skill(project_oad, "alpha", "a", "ab")
-        self._write_skill(project_oc, "beta", "b", "bb")
-        self._write_skill(global_oad, "gamma", "g", "gb")
-        self._write_skill(global_oc, "delta", "d", "db")
+        self._write_skill(project_agents, "beta", "b", "bb")
+        self._write_skill(project_oc, "gamma", "c", "cb")
+        self._write_skill(global_oad, "delta", "d", "db")
+        self._write_skill(global_agents, "epsilon", "e", "eb")
+        self._write_skill(global_oc, "zeta", "z", "zb")
 
         result = discover_skills()
 
-        assert set(result.keys()) == {"alpha", "beta", "gamma", "delta"}
+        assert set(result.keys()) == {
+            "alpha",
+            "beta",
+            "gamma",
+            "delta",
+            "epsilon",
+            "zeta",
+        }
 
     def test_project_skills_use_active_sandbox_workspace(self, sandbox_workspace):
         project_oad = sandbox_workspace / ".openagentd" / "skills"
@@ -722,7 +792,7 @@ class TestMultiRootDiscovery:
 
     @pytest.mark.asyncio
     async def test_load_skill_finds_opencode_skill(self, roots):
-        _project_oad, _project_oc, _global_oad, global_oc = roots
+        *_, global_oc = roots
         self._write_skill(global_oc, "research", "x", "Opencode body.")
 
         body = await load_skill("research")
@@ -730,8 +800,22 @@ class TestMultiRootDiscovery:
         assert "Opencode body." in body
 
     @pytest.mark.asyncio
+    async def test_load_skill_finds_agents_project_skill(self, sandbox_workspace):
+        self._write_skill(
+            sandbox_workspace / ".agents" / "skills",
+            "deploy",
+            "Deploy app",
+            "Deploy body.",
+        )
+
+        body = await load_skill("deploy")
+
+        assert "Deploy body." in body
+        assert "Skill directory: .agents/skills/deploy" in body
+
+    @pytest.mark.asyncio
     async def test_load_skill_precedence_openagentd_wins(self, roots):
-        project_oad, _project_oc, _global_oad, global_oc = roots
+        project_oad, *middle, global_oc = roots
         self._write_skill(global_oc, "research", "x", "Opencode body.")
         self._write_skill(project_oad, "research", "x", "Openagentd body.")
 
@@ -740,7 +824,7 @@ class TestMultiRootDiscovery:
         assert "Openagentd body." in body
 
     def test_cache_invalidates_when_opencode_root_changes(self, roots):
-        _project_oad, _project_oc, _global_oad, global_oc = roots
+        *_, global_oc = roots
         self._write_skill(global_oc, "alpha", "a", "ab")
         first = discover_skills()
         assert set(first.keys()) == {"alpha"}
@@ -753,6 +837,20 @@ class TestMultiRootDiscovery:
         second = discover_skills()
 
         assert set(second.keys()) == {"alpha", "beta"}
+
+
+def test_real_root_precedence():
+    from app.agent.tools.builtin.skill import _builtin_skills_dir, _iter_skill_roots
+
+    roots = _iter_skill_roots()
+    assert len(roots) == 7
+    assert ".openagentd/skills" in str(roots[0])
+    assert ".agents/skills" in str(roots[1])
+    assert ".opencode/skills" in str(roots[2])
+    # roots[3] is _SKILLS_DIR
+    assert ".agents/skills" in str(roots[4])
+    assert ".config/opencode/skills" in str(roots[5])
+    assert roots[6] == _builtin_skills_dir()
 
 
 class TestBuiltinSkills:
