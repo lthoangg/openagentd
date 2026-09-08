@@ -87,20 +87,26 @@ class TestSkillsRoots:
 
         assert (sandbox / ".openagentd" / "skills").resolve() in roots
 
+    def test_includes_agents_project_root(self, sandbox):
+        roots = _skills_roots()
+
+        assert (sandbox / ".agents" / "skills").resolve() in roots
+
     def test_includes_opencode_project_root(self, sandbox):
         roots = _skills_roots()
 
         assert (sandbox / ".opencode" / "skills").resolve() in roots
 
-    def test_all_three_roots_present(self, sandbox, tmp_path, monkeypatch):
+    def test_all_roots_present(self, sandbox, tmp_path, monkeypatch):
         global_dir = tmp_path / "global" / "skills"
         monkeypatch.setattr("app.core.config.settings.SKILLS_DIR", str(global_dir))
 
         roots = _skills_roots()
 
-        assert len(roots) == 3
+        assert len(roots) == 4
         assert global_dir.resolve() in roots
         assert (sandbox / ".openagentd" / "skills").resolve() in roots
+        assert (sandbox / ".agents" / "skills").resolve() in roots
         assert (sandbox / ".opencode" / "skills").resolve() in roots
 
     def test_returns_resolved_absolute_paths(self, sandbox):
@@ -124,7 +130,9 @@ class TestSkillsRoots:
         assert global_dir.resolve() in roots
         # Project roots must be absent — sandbox unavailable
         project_roots = [
-            r for r in roots if ".openagentd" in str(r) or ".opencode" in str(r)
+            r
+            for r in roots
+            if ".openagentd" in str(r) or ".opencode" in str(r) or ".agents" in str(r)
         ]
         assert project_roots == []
 
@@ -178,6 +186,25 @@ class TestNotifyFsChange:
         _prime_cache()
 
         skill_file = sandbox / ".openagentd" / "skills" / "my-skill" / "SKILL.md"
+        notify_fs_change(skill_file.resolve())
+
+        assert _discover_skills_cached.cache_info().currsize == 0
+
+    # ── project-local .agents/skills ─────────────────────────────────────
+
+    def test_clears_cache_for_agents_project_skill(self, sandbox):
+        _prime_cache()
+        assert _discover_skills_cached.cache_info().currsize > 0
+
+        skill_file = sandbox / ".agents" / "skills" / "research" / "SKILL.md"
+        notify_fs_change(skill_file.resolve())
+
+        assert _discover_skills_cached.cache_info().currsize == 0
+
+    def test_clears_cache_for_nested_agents_project_skill(self, sandbox):
+        _prime_cache()
+
+        skill_file = sandbox / ".agents" / "skills" / "oad" / "debug" / "SKILL.md"
         notify_fs_change(skill_file.resolve())
 
         assert _discover_skills_cached.cache_info().currsize == 0
@@ -387,6 +414,35 @@ class TestEndToEnd:
         assert "research" not in first
 
         skill_dir = project_oc / "research"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: research\ndescription: Research workflow.\n---\nBody."
+        )
+        notify_fs_change((skill_dir / "SKILL.md").resolve())
+
+        second = discover_skills()
+        assert "research" in second
+        assert second["research"]["description"] == "Research workflow."
+
+    def test_agents_project_skill_visible_after_notify(
+        self, sandbox, tmp_path, monkeypatch
+    ):
+        """Same end-to-end flow for the .agents/skills/ project root."""
+        global_skills = tmp_path / "global" / "skills"
+        monkeypatch.setattr("app.core.config.settings.SKILLS_DIR", str(global_skills))
+
+        from app.agent.tools.builtin.skill import discover_skills
+
+        project_agents = sandbox / ".agents" / "skills"
+        monkeypatch.setattr(
+            "app.agent.tools.builtin.skill._iter_skill_roots",
+            lambda: [project_agents, global_skills],
+        )
+
+        first = discover_skills()
+        assert "research" not in first
+
+        skill_dir = project_agents / "research"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
             "---\nname: research\ndescription: Research workflow.\n---\nBody."

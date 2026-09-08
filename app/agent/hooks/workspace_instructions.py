@@ -27,10 +27,17 @@ _GLOBAL_INSTRUCTIONS_FILENAME = "AGENTS.md"
 
 
 def global_instructions_path() -> Path:
-    """Return the global instructions file: ``{OPENAGENTD_CONFIG_DIR}/AGENTS.md``."""
+    """Return the global instructions file: ``{OPENAGENTD_CONFIG_DIR}/AGENTS.md``
+    (falling back to ``~/.agents/AGENTS.md``)."""
     from app.core.config import settings
 
-    return Path(settings.OPENAGENTD_CONFIG_DIR) / _GLOBAL_INSTRUCTIONS_FILENAME
+    path = Path(settings.OPENAGENTD_CONFIG_DIR) / _GLOBAL_INSTRUCTIONS_FILENAME
+    if path.is_file():
+        return path
+    universal_path = Path.home() / ".agents" / _GLOBAL_INSTRUCTIONS_FILENAME
+    if universal_path.is_file():
+        return universal_path
+    return path
 
 
 class WorkspaceInstructionsHook(BaseAgentHook):
@@ -78,7 +85,7 @@ class WorkspaceInstructionsHook(BaseAgentHook):
     def _read_workspace_instructions(self) -> str:
         if self._workspace is None:
             return ""
-        for filename in ("AGENTS.md", "CLAUDE.md"):
+        for filename in ("AGENTS.md", ".agents/AGENTS.md", "CLAUDE.md"):
             instructions = self._read_instruction_file(self._workspace / filename)
             if instructions:
                 return instructions

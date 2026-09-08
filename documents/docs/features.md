@@ -2,7 +2,7 @@
 title: Features
 description: Canonical, version-cited catalogue of shipped user-visible OpenAgentd features.
 status: stable
-updated: 2026-09-07
+updated: 2026-09-08
 ---
 
 # Features
@@ -14,7 +14,7 @@ release that introduced it (where known). When you ship something new, **add it 
 > double-clickable app that runs an agent on your machine, with a
 > real UI to watch every step. Open source (Apache 2.0). 16 providers. Your keys.
 
-**Latest release:** v2.11.1 · September 7, 2026 · [release notes](https://github.com/lthoangg/openagentd/releases/tag/v2.11.1)
+**Latest release:** v2.12.0 · September 8, 2026 · [release notes](https://github.com/lthoangg/openagentd/releases/tag/v2.12.0)
 
 ---
 
@@ -312,6 +312,7 @@ run from the terminal.
   scrollbar or selection drags now detach the transcript too, so reading back
   through a long streaming tool call no longer snaps to the bottom on every
    output update `[v1.132.0]`.
+  Auto-follow remains attached when tool output collapses, turn pruning, or layout shrinkage reduces scroll height during token streaming `[v2.12.0]`.
 - **Mobile keyboard viewport guardrails** `[v1.99.1]` — virtual-keyboard detection now uses the pre-keyboard layout height, the mobile shell stays pinned instead of following `visualViewport.offsetTop`, and chat auto-stick ignores keyboard-only scrollport resizes so manual transcript scrolling no longer flickers on iOS/WebViews.
 - **Tool-call inspector** `[since v1.0]` — every tool call expands to show
   arguments, status, results, and inline Git-like diffs for file edits. Read
@@ -448,6 +449,7 @@ executes tools, manages its task list, and inspects workspace repositories.
   attachments queue too: attaching files while the agent is replying no longer
   errors — the queued bubble lists the filenames, and cancelling the queued
   message restores both text and files into the composer `[v1.113.0]`.
+  Injected queued messages are excluded from pre-promotion LLM windows and pruned from pending state on session reload so they never resurrect in the queue UI `[v2.12.0]`.
 - **`provider_status` SSE events in stream** `[v1.17.0]` — retry, exhaustion,
   and fallback transitions surface live in single-agent and split-pane views.
 - **Actionable provider HTTP errors** `[v1.56.0]` — non-retryable provider
@@ -566,12 +568,12 @@ agent against it.
   workspace doesn't crowd the others.
 - **`@file` / `@folder` auto-attach** `[v1.17.0]` — see [§1](#1-the-desktop-coding-workspace).
 - **Slash commands scoped to coding workspaces** `[v1.17.0]` — project-local
-  commands in `.openagentd/commands/**/*.md` and `.opencode/commands/**/*.md`
+  commands in `.openagentd/commands/**/*.md`, universal `.agents/commands/**/*.md` `[v2.12.0]`, and `.opencode/commands/**/*.md`
   load only when a workspace is attached. Local commands win on name conflict.
   Coding chat stays global-only.
 - **Snippet picker** `[v1.31.0]` — in coding workspaces, type `#` anywhere
   in the composer to pick prompt snippets from `.openagentd/snippets/**/*.md`
-  or `{OPENAGENTD_CONFIG_DIR}/snippets/**/*.md` and insert the rendered body.
+  or `{OPENAGENTD_CONFIG_DIR}/snippets/**/*.md` (plus universal `.agents/snippets/**/*.md` and `~/.agents/snippets/**/*.md` `[v2.12.0]`) and insert the rendered body.
 - **Git-backed `/undo` and `/redo`** `[v1.11.0]` — restore workspace files
   (created, modified, deleted) to the exact prior state from any prior turn in
   chat history. Different from editor undo: this is tied to chat turns.
@@ -866,7 +868,7 @@ MCP.
   being available and on normal LSP scope rules (e.g. TypeScript honours `tsconfig.json`).
   Pinned `ty` + `ruff` now ship with the Python runtime, while TypeScript is a
   consented, on-demand backend component with a verified Bun download, locked
-  npm packages, a cross-surface install prompt, and `openagentd lsp` status/install
+  npm packages, a cross-surface install prompt (styled as a floating, non-blocking, draggable and minimizable notification card `[v2.12.0]`), and `openagentd lsp` status/install
   commands. Managed tools live under the regeneratable cache and do not modify
   the user's project.
 - **Semantic LSP navigation** `[v1.133.0]` — coding agents can find definitions,
@@ -1013,7 +1015,7 @@ Four orthogonal ways to add capability.
     `load_skill` now always prepends a `Skill directory: <path>` line to its response so the
     agent finds bundled reference files without relying on the author adding `{SKILL_DIR}`
     tokens `[v1.92.0]`. Skill cache invalidation now also watches project-local skill roots
-    (`.openagentd/skills/`, `.opencode/skills/`), not just the global config directory, so
+    (`.openagentd/skills/`, `.agents/skills/` `[v2.12.0]`, `.opencode/skills/`), not just the global config directory, so
     edits are picked up on the next `discover_skills()` call `[v1.92.0]`.
   - **Semantic docs search skill experiment** `[v1.98.0]` *(beta)* — project workspaces can ship
     an `oad/search-doc` skill plus a turbovec-based document-search experiment for semantic lookup

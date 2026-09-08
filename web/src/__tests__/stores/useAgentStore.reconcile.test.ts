@@ -922,4 +922,37 @@ describe('queued messages mid-turn injection and reconciliation', () => {
     expect(pending.some((m) => m.id === 'pm-1')).toBe(false)
     expect(pending.some((m) => m.id === 'pm-2')).toBe(true)
   })
+
+  it('prunes confirmed user messages from _pendingMessages during loadSession (F5 refresh)', async () => {
+    const now = Date.now()
+    useAgentStore.setState((state) => {
+      state.sessionId = 'lead-sess'
+      state._pendingMessages = [
+        { id: 'pm-1', sessionId: 'lead-sess', content: 'injected user message', submittedAt: now + 1000 },
+        { id: 'pm-2', sessionId: 'lead-sess', content: 'still queued', submittedAt: now },
+      ]
+      return state
+    })
+
+    mockSessionHistory.mockImplementation(() => Promise.resolve({
+      lead: {
+        id: 'lead-sess',
+        agent_name: 'lead',
+        running: false,
+        messages: [
+          { id: 'pm-1', role: 'user', content: 'injected user message', kind: 'chat' },
+          { id: 'pm-2', role: 'user', kind: 'queued', content: 'still queued', extra: { queue_status: 'queued' } },
+        ],
+      },
+      members: [],
+      has_more: false,
+      next_cursor: null,
+    }))
+
+    await useAgentStore.getState().loadSession('lead-sess')
+
+    const pending = useAgentStore.getState()._pendingMessages
+    expect(pending.some((m) => m.id === 'pm-1')).toBe(false)
+    expect(pending.some((m) => m.id === 'pm-2')).toBe(true)
+  })
 })

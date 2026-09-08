@@ -9,6 +9,7 @@ This matters for any skills root the skill tool scans:
 
 * ``{SKILLS_DIR}``                     — global, from settings
 * ``{workspace}/.openagentd/skills/``  — project-local (OpenAgentd-native)
+* ``{workspace}/.agents/skills/``      — project-local (universal .agents)
 * ``{workspace}/.opencode/skills/``    — project-local (opencode reuse)
 
 The ``discover_skills`` cache in ``app.agent.tools.builtin.skill`` is
@@ -65,6 +66,7 @@ def _skills_roots() -> list[Path]:
 
         workspace = get_denied_paths().workspace_root.resolve()
         roots.append((workspace / ".openagentd" / "skills").resolve())
+        roots.append((workspace / ".agents" / "skills").resolve())
         roots.append((workspace / ".opencode" / "skills").resolve())
     except Exception as exc:  # noqa: BLE001 — see note above
         logger.debug("config_watch_project_skills_roots_failed error={!r}", exc)

@@ -9,7 +9,10 @@ class SnippetSummary(BaseModel):
     name: str
     description: str = ""
     source: str = Field(
-        description="Origin root: project-openagentd / global-openagentd.",
+        description=(
+            "Origin root: project-openagentd / project-agents / "
+            "global-openagentd / global-agents."
+        ),
     )
 
 

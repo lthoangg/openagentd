@@ -156,11 +156,15 @@ async def seq_before_row(
     return seq_between(prev, anchor.seq)
 
 
-async def _llm_window_rows(db: AsyncSession, session_id: UUID) -> list[SessionMessage]:
+async def _llm_window_rows(
+    db: AsyncSession, session_id: UUID, *, exclude_queued: bool = False
+) -> list[SessionMessage]:
     """Fetch the derived LLM window (boundary-aware)."""
     boundary = await _revert_boundary(db, session_id)
     summary = await _get_active_summary(db, session_id, boundary)
-    stmt = _llm_window_stmt(session_id, summary, boundary)
+    stmt = _llm_window_stmt(
+        session_id, summary, boundary, exclude_queued=exclude_queued
+    )
     return list((await db.exec(stmt)).all())
 
 
@@ -172,7 +176,7 @@ async def get_messages_for_llm_after(
     """Deserialize only visible LLM rows after an append-only cursor."""
     boundary = await _revert_boundary(db, session_id)
     summary = await _get_active_summary(db, session_id, boundary)
-    stmt = _llm_window_stmt(session_id, summary, boundary)
+    stmt = _llm_window_stmt(session_id, summary, boundary, exclude_queued=True)
     seq, message_id = cursor
     stmt = stmt.where(_after_cursor_predicate(seq, message_id))
     rows = (await db.exec(stmt)).all()
@@ -465,7 +469,7 @@ async def get_messages_for_llm(db: AsyncSession, session_id: UUID) -> list[ChatM
 
     1. Active summary = newest-created ``kind='summary'`` row (before the
        undo boundary, when one is staged).
-    2. Window = pinned rows + the active summary + every chat/note/queued row
+    2. Window = pinned rows + the active summary + every chat/note row
        positioned at/after it, in ``(seq, id)`` order. The summary is
        *anchored* before the window it kept, so the order the LLM sees is
        ``[pinned…, summary, kept tail…, new messages…]``.
@@ -473,7 +477,7 @@ async def get_messages_for_llm(db: AsyncSession, session_id: UUID) -> list[ChatM
     """
     logger.debug("loading_llm_messages session_id={}", session_id)
     try:
-        db_messages = await _llm_window_rows(db, session_id)
+        db_messages = await _llm_window_rows(db, session_id, exclude_queued=True)
         logger.debug(
             "llm_messages_fetched session_id={} count={}",
             session_id,

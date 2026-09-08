@@ -43,6 +43,10 @@ export function useAutoFollowScroll(options: UseAutoFollowScrollOptions = {}) {
   const attachedRef = useRef(true)
   const isProgrammaticScrollRef = useRef(false)
   const lastScrollTopRef = useRef(0)
+  const lastScrollHeightRef = useRef(0)
+  const lastContentHeightRef = useRef(0)
+  const smoothScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const smoothScrollFinishRef = useRef<(() => void) | null>(null)
   const userScrollIntentUntilRef = useRef(0)
   const pointerDownRef = useRef(false)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
@@ -73,23 +77,44 @@ export function useAutoFollowScroll(options: UseAutoFollowScrollOptions = {}) {
     userScrollIntentUntilRef.current = 0
     setShowScrollBtn(false)
     if (behavior === 'smooth' && typeof el.scrollTo === 'function') {
+      if (smoothScrollTimeoutRef.current) {
+        clearTimeout(smoothScrollTimeoutRef.current)
+        smoothScrollTimeoutRef.current = null
+      }
+      if (smoothScrollFinishRef.current) {
+        smoothScrollFinishRef.current()
+      }
       isProgrammaticScrollRef.current = true
       el.scrollTo({ top: bottom, behavior: 'smooth' })
       let finished = false
       const finish = () => {
         if (finished) return
         finished = true
-        isProgrammaticScrollRef.current = false
+        smoothScrollFinishRef.current = null
+        if (smoothScrollTimeoutRef.current) {
+          clearTimeout(smoothScrollTimeoutRef.current)
+          smoothScrollTimeoutRef.current = null
+        }
         el.removeEventListener('scrollend', finish)
         const target = Math.max(0, el.scrollHeight - el.clientHeight)
         if (Math.abs(el.scrollTop - target) > 1) {
           el.scrollTop = target
           lastScrollTopRef.current = el.scrollTop
         }
+        isProgrammaticScrollRef.current = false
       }
+      smoothScrollFinishRef.current = finish
       el.addEventListener('scrollend', finish)
-      setTimeout(finish, 500)
+      smoothScrollTimeoutRef.current = setTimeout(finish, 600)
     } else {
+      if (smoothScrollTimeoutRef.current) {
+        clearTimeout(smoothScrollTimeoutRef.current)
+        smoothScrollTimeoutRef.current = null
+      }
+      if (smoothScrollFinishRef.current) {
+        smoothScrollFinishRef.current = null
+      }
+      isProgrammaticScrollRef.current = false
       el.scrollTop = bottom
       lastScrollTopRef.current = el.scrollTop
     }
@@ -99,14 +124,29 @@ export function useAutoFollowScroll(options: UseAutoFollowScrollOptions = {}) {
     const el = scrollRef.current
     if (!el) return
     lastScrollTopRef.current = el.scrollTop
+    lastScrollHeightRef.current = el.scrollHeight
+    if (contentRef.current) {
+      lastContentHeightRef.current = contentRef.current.getBoundingClientRect().height
+    }
 
     const onScroll = () => {
       const currentScrollTop = el.scrollTop
       const prevScrollTop = lastScrollTopRef.current
       lastScrollTopRef.current = currentScrollTop
 
+      const currentScrollHeight = el.scrollHeight
+      const prevScrollHeight = lastScrollHeightRef.current
+      lastScrollHeightRef.current = currentScrollHeight
+
+      const content = contentRef.current
+      const currentContentHeight = content ? content.getBoundingClientRect().height : 0
+      const prevContentHeight = lastContentHeightRef.current
+      if (content) {
+        lastContentHeightRef.current = currentContentHeight
+      }
+
       if (isProgrammaticScrollRef.current) return
-      const dist = el.scrollHeight - currentScrollTop - el.clientHeight
+      const dist = currentScrollHeight - currentScrollTop - el.clientHeight
       const atBottom = dist <= SCROLL_THRESHOLD
 
       if (atBottom) {
@@ -116,7 +156,11 @@ export function useAutoFollowScroll(options: UseAutoFollowScrollOptions = {}) {
           setShowScrollBtn(false)
         }
       } else if (attachedRef.current) {
-        if (!document.documentElement.hasAttribute('data-keyboard-open')) {
+        const layoutShrank =
+          (prevScrollHeight > 0 && currentScrollHeight < prevScrollHeight) ||
+          (prevContentHeight > 0 && currentContentHeight < prevContentHeight)
+
+        if (!layoutShrank && !document.documentElement.hasAttribute('data-keyboard-open')) {
           const isScrollUp = currentScrollTop < prevScrollTop
           if (isScrollUp) {
             attachedRef.current = false
@@ -244,6 +288,8 @@ export function useAutoFollowScroll(options: UseAutoFollowScrollOptions = {}) {
 
       lastContentHeight = nextContentHeight
       lastClientHeight = nextClientHeight
+      lastContentHeightRef.current = nextContentHeight
+      lastScrollHeightRef.current = el.scrollHeight
       if (document.documentElement.hasAttribute('data-keyboard-open') && viewportChanged && !contentGrew && !contentChanged) return
       const target = Math.max(0, el.scrollHeight - el.clientHeight)
       if (Math.abs(el.scrollTop - target) > 0.5) {

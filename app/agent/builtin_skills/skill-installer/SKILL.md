@@ -17,10 +17,12 @@ given `name` wins (`{workspace}` is the active sandbox workspace root — in
 **coding mode** that is the attached workspace dir, not the daemon's cwd):
 
 1. `{workspace}/.openagentd/skills/{skill-name}/SKILL.md`
-2. `{workspace}/.opencode/skills/{skill-name}/SKILL.md`
-3. `{SKILLS_DIR}/{skill-name}/SKILL.md`  (global, typically `{OPENAGENTD_CONFIG_DIR}/skills`)
-4. `~/.config/opencode/skills/{skill-name}/SKILL.md`
-5. Bundled OpenAgentd operational skills — read-only fallback.
+2. `{workspace}/.agents/skills/{skill-name}/SKILL.md`
+3. `{workspace}/.opencode/skills/{skill-name}/SKILL.md`
+4. `{SKILLS_DIR}/{skill-name}/SKILL.md`  (global, typically `{OPENAGENTD_CONFIG_DIR}/skills`)
+5. `~/.agents/skills/{skill-name}/SKILL.md`
+6. `~/.config/opencode/skills/{skill-name}/SKILL.md`
+7. Bundled OpenAgentd operational skills — read-only fallback.
 
 Default to `{SKILLS_DIR}` (global — available in both normal and coding modes)
 unless the user explicitly asks for a project-local skill, in which case write to

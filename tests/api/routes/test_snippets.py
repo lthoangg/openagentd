@@ -101,3 +101,34 @@ async def test_list_and_render_snippets(client, roots):
         "name": "git/commit",
         "content": "Commit staged changes.",
     }
+
+
+@pytest.mark.asyncio
+async def test_list_and_render_agents_snippets(client, roots, monkeypatch, tmp_path):
+    from app.services import snippets as snippets_module
+
+    home = tmp_path / "home"
+    monkeypatch.setattr(snippets_module.Path, "home", classmethod(lambda cls: home))
+
+    workspace, _project_root, _global_root = roots
+    project_agents = workspace / ".agents" / "snippets"
+    global_agents = home / ".agents" / "snippets"
+
+    _write(
+        project_agents / "refactor.md",
+        "---\ndescription: Refactor\n---\nRefactor code.",
+    )
+    _write(global_agents / "docs.md", "Write docs.")
+
+    res = await client.get("/api/snippets", params={"workspace": str(workspace)})
+    assert res.status_code == 200
+    snippets = {s["name"]: s for s in res.json()["snippets"]}
+    assert snippets["refactor"]["source"] == "project-agents"
+    assert snippets["refactor"]["description"] == "Refactor"
+    assert snippets["docs"]["source"] == "global-agents"
+
+    rendered = await client.post(
+        "/api/snippets/refactor/render", params={"workspace": str(workspace)}
+    )
+    assert rendered.status_code == 200
+    assert rendered.json() == {"name": "refactor", "content": "Refactor code."}

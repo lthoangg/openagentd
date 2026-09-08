@@ -626,14 +626,22 @@ async function loadSessionImpl(
         }
       }
 
-      const queued = queuedMessagesFromHistory(sessionId, history.lead.messages)
+      const confirmedUser = history.lead.messages.filter(
+        (m) => m.role === 'user' && m.kind !== 'queued' && m.extra?.queue_status !== 'queued',
+      )
+      const confirmedUserIds = new Set(confirmedUser.map((m) => m.id))
+      const confirmedUserContents = new Set(confirmedUser.map((m) => (m.content || '').trim()))
+
+      const queued = queuedMessagesFromHistory(sessionId, history.lead.messages).filter(
+        (msg) => !confirmedUserIds.has(msg.id) && !confirmedUserContents.has(msg.content.trim()),
+      )
       const queuedIds = new Set(queued.map((msg) => msg.id))
       draft._pendingMessages = [
-        ...draft._pendingMessages.filter((msg) =>
-          msg.sessionId !== sessionId ||
-          queuedIds.has(msg.id) ||
-          (msg.submittedAt !== undefined && msg.submittedAt >= fetchStartedAt)
-        ),
+        ...draft._pendingMessages.filter((msg) => {
+          if (msg.sessionId !== sessionId) return true
+          if (confirmedUserIds.has(msg.id) || confirmedUserContents.has((msg.content || '').trim())) return false
+          return queuedIds.has(msg.id) || (msg.submittedAt !== undefined && msg.submittedAt >= fetchStartedAt)
+        }),
         ...queued.filter((msg) => !draft._pendingMessages.some((existing) => existing.id === msg.id)),
       ]
 
@@ -1067,7 +1075,9 @@ export const createSessionSlice: StateCreator<
       }
 
       // Adopt any queued rows the delta revealed, matching loadSession.
-      const queued = queuedMessagesFromHistory(sessionId, delta.lead.messages)
+      const queued = queuedMessagesFromHistory(sessionId, delta.lead.messages).filter(
+        (msg) => !confirmedUserIds.has(msg.id) && !confirmedUserContents.has(msg.content.trim()),
+      )
       if (queued.length > 0) {
         draft._pendingMessages = [
           ...draft._pendingMessages,

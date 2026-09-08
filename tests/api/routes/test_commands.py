@@ -262,6 +262,40 @@ async def test_local_opencode_wins_over_global_openagentd(client, roots):
 
 
 @pytest.mark.asyncio
+async def test_agents_commands_discovered_with_project_and_global_source(client, roots):
+    project_openagentd, _project_opencode, _global_openagentd, _global_opencode = roots
+    workspace = project_openagentd.parents[1]
+    project_agents = workspace / ".agents" / "commands"
+    home = project_openagentd.parents[2] / "home"
+    global_agents = home / ".agents" / "commands"
+
+    _write(
+        project_agents / "format.md",
+        "---\ndescription: Format project code\n---\nRun formatter",
+    )
+    _write(
+        global_agents / "lint.md",
+        "---\ndescription: Global linter\n---\nRun linter",
+    )
+
+    res = await client.get("/api/commands", params={"workspace": str(workspace)})
+    assert res.status_code == 200
+    cmds = {c["name"]: c for c in res.json()["commands"]}
+    assert cmds["format"]["source"] == "project-agents"
+    assert cmds["format"]["description"] == "Format project code"
+    assert cmds["lint"]["source"] == "global-agents"
+    assert cmds["lint"]["description"] == "Global linter"
+
+    render_res = await client.post(
+        "/api/commands/format/render",
+        params={"workspace": str(workspace)},
+        json={"arguments": ""},
+    )
+    assert render_res.status_code == 200
+    assert render_res.json() == {"name": "format", "content": "Run formatter"}
+
+
+@pytest.mark.asyncio
 async def test_workspace_local_commands_do_not_leak_between_projects(
     client, workspaces
 ):

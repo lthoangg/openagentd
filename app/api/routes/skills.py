@@ -63,14 +63,19 @@ def _skill_source(path: Path) -> str:
     resolved = path.resolve()
     config_skills = Path(settings.SKILLS_DIR).resolve()
     config_dir = Path(settings.OPENAGENTD_CONFIG_DIR).resolve()
-    opencode_global = Path.home() / ".config" / "opencode" / "skills"
+    agents_global = (Path.home() / ".agents" / "skills").resolve()
+    opencode_global = (Path.home() / ".config" / "opencode" / "skills").resolve()
     project_root = skill_module._project_root().resolve()
     if _is_relative_to(resolved, project_root / ".openagentd" / "skills"):
         return "project-openagentd"
+    if _is_relative_to(resolved, project_root / ".agents" / "skills"):
+        return "project-agents"
     if _is_relative_to(resolved, project_root / ".opencode" / "skills"):
         return "project-opencode"
     if _is_relative_to(resolved, config_skills):
         return "global-openagentd"
+    if _is_relative_to(resolved, agents_global):
+        return "global-agents"
     if _is_relative_to(resolved, opencode_global):
         return "global-opencode"
     if _is_relative_to(resolved, _builtin_skills_root()):
@@ -112,11 +117,16 @@ def _delete_skill_file(path: Path) -> None:
         parent = path.parent.parent
         # Clean up an empty parent for one-level nested skills, but never walk
         # above a known skill root.
+        from app.agent.tools.builtin import skill as skill_module
+
         source = _skill_source(path)
+        project_root = skill_module._project_root()
         root_by_source = {
-            "project-openagentd": Path.cwd() / ".openagentd" / "skills",
-            "project-opencode": Path.cwd() / ".opencode" / "skills",
+            "project-openagentd": project_root / ".openagentd" / "skills",
+            "project-agents": project_root / ".agents" / "skills",
+            "project-opencode": project_root / ".opencode" / "skills",
             "global-openagentd": Path(settings.SKILLS_DIR),
+            "global-agents": Path.home() / ".agents" / "skills",
             "global-opencode": Path.home() / ".config" / "opencode" / "skills",
         }
         root = root_by_source.get(source)
