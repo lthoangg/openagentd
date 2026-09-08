@@ -351,3 +351,25 @@ async def test_cancel_queued_message_deletes_synthetic_attachment_rows(
     assert await session.get(SessionMessage, queued.id) is None
     assert await session.get(SessionMessage, synthetic.id) is None
     assert await session.get(SessionMessage, unrelated.id) is not None
+
+
+@pytest.mark.asyncio
+async def test_get_messages_for_llm_excludes_unpopped_queued_messages(
+    session: AsyncSession,
+):
+    chat_session = await create_chat_session(session)
+    await save_message(session, chat_session.id, HumanMessage(content="first"))
+    await save_queued_user_message(
+        session, chat_session.id, "queued message", save_message=save_message
+    )
+    await session.commit()
+
+    llm_msgs = await get_messages_for_llm(session, chat_session.id)
+    assert [m.content for m in llm_msgs] == ["first"]
+
+    popped = await pop_queued_user_messages(session, chat_session.id)
+    await session.commit()
+    assert [m.content for m in popped] == ["queued message"]
+
+    llm_msgs_after = await get_messages_for_llm(session, chat_session.id)
+    assert [m.content for m in llm_msgs_after] == ["first", "queued message"]

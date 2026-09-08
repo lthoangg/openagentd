@@ -16,9 +16,9 @@ Rules
   boundary, only summaries positioned before the boundary are candidates —
   undoing past a summary therefore reactivates the previous one with no row
   mutation at all.
-* **LLM window** — ``pinned`` rows, plus every ``chat``/``note``/``queued``
+* **LLM window** — ``pinned`` rows, plus every ``chat``/``note``
   row positioned at/after the active summary, plus the active summary itself.
-  ``reverted`` rows and non-active summaries never appear.
+  ``reverted``, ``queued``, and non-active summaries never appear.
 * **Undo/redo** — the boundary is a message row; all comparisons are
   ``(seq, id)`` tuple tests. Nothing is restored or re-excluded dynamically:
   the window under a boundary falls out of the same two rules above.
@@ -166,13 +166,21 @@ def llm_window_stmt(
     session_id: UUID,
     summary: SessionMessage | None,
     boundary: SessionMessage | None = None,
+    *,
+    exclude_queued: bool = False,
 ):
     """Rows of the derived LLM window in position order.
 
     Callers obtain *summary* via :func:`get_active_summary` (with the same
     *boundary*) so the two queries agree on which summary is active.
     """
-    return _apply_llm_window(select(SessionMessage), session_id, summary, boundary)
+    return _apply_llm_window(
+        select(SessionMessage),
+        session_id,
+        summary,
+        boundary,
+        exclude_queued=exclude_queued,
+    )
 
 
 def llm_tool_pair_stmt(
@@ -195,11 +203,15 @@ def _apply_llm_window(
     session_id: UUID,
     summary: SessionMessage | None,
     boundary: SessionMessage | None,
+    *,
+    exclude_queued: bool = False,
 ):
     """Apply derived-window filters/order to a model or column projection."""
     stmt = stmt.where(col(SessionMessage.session_id) == session_id).where(
         col(SessionMessage.kind) != MessageKind.REVERTED
     )
+    if exclude_queued:
+        stmt = stmt.where(col(SessionMessage.kind) != MessageKind.QUEUED)
     if summary is not None:
         stmt = stmt.where(
             or_(col(SessionMessage.pinned), at_or_after_pos(summary))
@@ -466,11 +478,7 @@ async def exclude_messages_before_summary(
     def _candidates_stmt(stmt):
         stmt = (
             stmt.where(col(SessionMessage.session_id) == session_id)
-            .where(
-                col(SessionMessage.kind).in_(
-                    (MessageKind.CHAT, MessageKind.NOTE, MessageKind.QUEUED)
-                )
-            )
+            .where(col(SessionMessage.kind).in_((MessageKind.CHAT, MessageKind.NOTE)))
             .where(before_pos(summary_msg))
         )
         if previous is not None and previous.id != summary_msg.id:
