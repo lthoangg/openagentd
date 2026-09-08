@@ -409,6 +409,74 @@ describe("chat layout resize", () => {
       }
     })
   }
+
+  it("stays attached when content height collapses during stream growth (does not falsely detach)", async () => {
+    const originalResizeObserver = globalThis.ResizeObserver
+    const resizeObservers: Array<{
+      callback: ResizeObserverCallback
+      targets: Element[]
+    }> = []
+
+    globalThis.ResizeObserver = class {
+      private readonly entry: (typeof resizeObservers)[number]
+      constructor(callback: ResizeObserverCallback) {
+        this.entry = { callback, targets: [] }
+        resizeObservers.push(this.entry)
+      }
+      observe(target: Element) { this.entry.targets.push(target) }
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof globalThis.ResizeObserver
+
+    try {
+      const { container } = renderStream({ blocks: [makeTextBlock("b1", "Initial content")], isWorking: true })
+      const el = container.querySelector(".overflow-y-auto") as HTMLDivElement
+      const content = container.querySelector(".mx-auto") as HTMLDivElement
+      let scrollHeight = 1200
+      const clientHeight = 500
+      let scrollTop = 700
+      let contentHeight = 1200
+
+      Object.defineProperties(el, {
+        scrollHeight: { configurable: true, get: () => scrollHeight },
+        clientHeight: { configurable: true, get: () => clientHeight },
+        scrollTop: {
+          configurable: true,
+          get: () => scrollTop,
+          set: (value: number) => { scrollTop = value },
+        },
+      })
+      content.getBoundingClientRect = () => ({
+        x: 0, y: 0, width: 800, height: contentHeight, top: 0, right: 800, bottom: contentHeight, left: 0, toJSON: () => ({}),
+      })
+      const observer = resizeObservers.find((entry) => entry.targets.includes(content))
+
+      await act(async () => {
+        observer?.callback([{ target: content } as unknown as ResizeObserverEntry], {} as ResizeObserver)
+        el.dispatchEvent(new Event("scroll"))
+      })
+      expect(container.querySelector('button[aria-label="Scroll to bottom"]')).toBeNull()
+
+      // Stream grows to 1600 (content and scrollHeight grow)
+      scrollHeight = 1600
+      contentHeight = 1600
+      await act(async () => {
+        observer?.callback([{ target: content } as unknown as ResizeObserverEntry], {} as ResizeObserver)
+      })
+
+      // Now earlier tool call content collapses: height drops to 1400, and layout shifts scrollTop down to 600
+      scrollHeight = 1400
+      contentHeight = 1400
+      scrollTop = 600
+      await act(async () => {
+        el.dispatchEvent(new Event("scroll"))
+      })
+
+      expect(container.querySelector('button[aria-label="Scroll to bottom"]')).toBeNull()
+    } finally {
+      globalThis.ResizeObserver = originalResizeObserver
+    }
+  })
 })
 
 // ── bounce dots ───────────────────────────────────────────────────────────
